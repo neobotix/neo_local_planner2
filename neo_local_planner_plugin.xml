@@ -1,0 +1,7 @@
+<library path="neo_local_planner">
+  <class type="neo_local_planner::NeoLocalPlanner" base_class_type="nav2_core::Controller">
+    <description>
+      This is pure pursuit controller
+    </description>
+  </class>
+</library>
