@@ -184,14 +184,12 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
 	// compute delta time
 	const rclcpp::Time time_now = rclcpp::Clock().now();
 	const double dt = fmax(fmin((time_now - m_last_time).seconds(), 0.1), 0);
-
+	tf2::TimePoint time_out;
 	// get latest global to local transform (map to odom)
 	tf2::Stamped<tf2::Transform> global_to_local;
 	try {
-		geometry_msgs::msg::TransformStamped msg = tf_->lookupTransform(
-                  m_global_frame, tf2::timeFromSec(0),
-                  m_local_frame, tf2::timeFromSec(0),
-                  m_local_frame, tf2::durationFromSec(0.5));
+		geometry_msgs::msg::TransformStamped msg = tf_->lookupTransform(m_local_frame, m_global_frame, tf2::TimePointZero);
+
 		tf2::fromMsg(msg, global_to_local);
 	} catch(...) {
 		// ROS_WARN_NAMED("NeoLocalPlanner", "lookupTransform(m_local_frame, m_global_frame) failed");
@@ -211,12 +209,12 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
 
 	// get latest local pose
 	tf2::Transform local_pose;
-	tf2::fromMsg(position.pose, local_pose);
+	tf2::fromMsg(m_odometry->pose.pose, local_pose);
 
 	const double start_yaw = tf2::getYaw(local_pose.getRotation());
-	const double start_vel_x = speed.linear.x;
-	const double start_vel_y = speed.linear.y;
-	const double start_yawrate = speed.angular.z;
+	const double start_vel_x = m_odometry->twist.twist.linear.x;
+	const double start_vel_y =  m_odometry->twist.twist.linear.y;
+	const double start_yawrate =m_odometry->twist.twist.angular.z;
 
 	// calc dynamic lookahead distances
 	const double lookahead_dist = m_lookahead_dist + fmax(start_vel_x, 0) * lookahead_time;
@@ -783,7 +781,6 @@ void NeoLocalPlanner::configure(const rclcpp_lifecycle::LifecycleNode::SharedPtr
 
 void NeoLocalPlanner::odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg)
 {
-	boost::mutex::scoped_lock lock(m_odometry_mutex);
 	m_odometry = msg;
 }
 
