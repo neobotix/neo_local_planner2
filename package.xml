@@ -15,6 +15,7 @@
     <author>wittal@neobotix.de</author>
     <maintainer email="ros@neobotix.de">Neobotix GmbH</maintainer>
     <maintainer email="wittal@neobotix.de">Max Wittal</maintainer>
+    <maintainer email="padmanabhan@neobotix.de">Pradheep Padmanabhan</maintainer>
     <license>BSD</license>
     <url>http://wiki.ros.org/base_local_planner</url>
 

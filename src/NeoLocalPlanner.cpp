@@ -119,12 +119,12 @@ std::vector<std::pair <int,int> > get_line_cells(
 	std::vector< std::pair <int,int> > cells;
 
 	// Line iterator for determining the cells between two points
- 	for (nav2_util::LineIterator line(coords[0][0], coords[1][0], coords[0][1], coords[1][1]); line.isValid(); line.advance())
+ 	for (nav2_util::LineIterator line(coords[0][0], coords[0][1], coords[1][0], coords[1][1]); line.isValid(); line.advance())
  	{
         cells.push_back( std::make_pair(line.getX(),line.getY()) );
     }
     // Mandatory reversal
-    std::reverse( cells.begin(), cells.end() );
+    // std::reverse( cells.begin(), cells.end() );
 
 	return cells;
 }
@@ -184,12 +184,11 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
 	// compute delta time
 	const rclcpp::Time time_now = rclcpp::Clock().now();
 	const double dt = fmax(fmin((time_now - m_last_time).seconds(), 0.1), 0);
-	tf2::TimePoint time_out;
+
 	// get latest global to local transform (map to odom)
 	tf2::Stamped<tf2::Transform> global_to_local;
 	try {
 		geometry_msgs::msg::TransformStamped msg = tf_->lookupTransform(m_local_frame, m_global_frame, tf2::TimePointZero);
-
 		tf2::fromMsg(msg, global_to_local);
 	} catch(...) {
 		// ROS_WARN_NAMED("NeoLocalPlanner", "lookupTransform(m_local_frame, m_global_frame) failed");
@@ -209,12 +208,12 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
 
 	// get latest local pose
 	tf2::Transform local_pose;
-	tf2::fromMsg(m_odometry->pose.pose, local_pose);
+	tf2::fromMsg(position.pose, local_pose);
 
 	const double start_yaw = tf2::getYaw(local_pose.getRotation());
-	const double start_vel_x = m_odometry->twist.twist.linear.x;
-	const double start_vel_y =  m_odometry->twist.twist.linear.y;
-	const double start_yawrate =m_odometry->twist.twist.angular.z;
+	const double start_vel_x = speed.linear.x;
+	const double start_vel_y = speed.linear.y;
+	const double start_yawrate = speed.angular.z;
 
 	// calc dynamic lookahead distances
 	const double lookahead_dist = m_lookahead_dist + fmax(start_vel_x, 0) * lookahead_time;
@@ -271,7 +270,7 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
 	double obstacle_cost = 0;
 	{
 		const double delta_move = 0.05;
-		const double delta_time = start_vel_x > trans_stopped_vel ? delta_move / start_vel_x : 0;
+		const double delta_time = start_vel_x > trans_stopped_vel ? (delta_move / start_vel_x) : 0;
 
 		tf2::Transform pose = actual_pose;
 		tf2::Transform last_pose = pose;
@@ -285,7 +284,6 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
 				unsigned int dummy[2] = {};
 				is_contained = costmap_->worldToMap(pose.getOrigin().x(), pose.getOrigin().y(), dummy[0], dummy[1]);
 			}
-
 			have_obstacle = cost >= max_cost;
 			obstacle_cost = fmax(obstacle_cost, cost);
 
@@ -302,7 +300,6 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
 				tmp.pose.orientation.w = tmp1.rotation.w;
 				local_path.poses.push_back(tmp);
 			}
-
 			if(!is_contained || have_obstacle) {
 				break;
 			}
@@ -310,6 +307,7 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
 			last_pose = pose;
 			pose = tf2::Transform(createQuaternionFromYaw(tf2::getYaw(pose.getRotation()) + start_yawrate * delta_time),
 							pose * tf2::Vector3(delta_move, 0, 0));
+
 			obstacle_dist += delta_move;
 		}
 	}
@@ -518,7 +516,6 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
 			control_yawrate -= delta_cost_yaw * cost_yaw_gain;
 		}
 	}
-
 	// check if we are stuck
 	if(have_obstacle && obstacle_dist <= 0 && delta_cost_x > 0
 		&& m_state == state_t::STATE_ROTATING && fabs(yaw_error) < M_PI / 6)
@@ -530,6 +527,13 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
 		// ROS_WARN_NAMED("NeoLocalPlanner", "We are stuck: yaw_error=%f, obstacle_dist=%f, obstacle_cost=%f, delta_cost_x=%f",
 						// yaw_error, obstacle_dist, obstacle_cost, delta_cost_x);
 		// return false;
+		geometry_msgs::msg::TwistStamped cmd_vel_stuck;
+  	cmd_vel_stuck.header.stamp = clock_->now();
+		cmd_vel_stuck.header.frame_id = position.header.frame_id;
+  	cmd_vel_stuck.twist.linear.x = 0;
+  	cmd_vel_stuck.twist.angular.z = 0;
+
+  return cmd_vel_stuck;
 	}
 
 	// logic check
@@ -729,7 +733,7 @@ void NeoLocalPlanner::configure(const rclcpp_lifecycle::LifecycleNode::SharedPtr
 	parent->get_parameter_or(plugin_name_ + ".acc_limit_trans", acc_lim_trans, 0.5);
 	parent->get_parameter_or(plugin_name_ + ".min_vel_x", min_vel_x, -0.1);
 	parent->get_parameter_or(plugin_name_ + ".max_vel_x", max_vel_x, 0.5);
-	parent->get_parameter_or(plugin_name_ + ".min_vel_y", min_vel_y, -0.1);
+	parent->get_parameter_or(plugin_name_ + ".min_vel_y", min_vel_y, -0.5);
 	parent->get_parameter_or(plugin_name_ + ".max_vel_y", max_vel_y, 0.5);
 	parent->get_parameter_or(plugin_name_ + ".min_rot_vel", min_vel_theta, 0.1);
 	parent->get_parameter_or(plugin_name_ + ".max_rot_vel", max_vel_theta, 0.5);
@@ -751,10 +755,10 @@ void NeoLocalPlanner::configure(const rclcpp_lifecycle::LifecycleNode::SharedPtr
 	parent->get_parameter_or(plugin_name_ + ".static_yaw_gain", static_yaw_gain, 3.0);
 	parent->get_parameter_or(plugin_name_ + ".cost_x_gain", cost_x_gain, 0.1);
 	parent->get_parameter_or(plugin_name_ + ".cost_y_gain", cost_y_gain, 0.1);
-	parent->get_parameter_or(plugin_name_ + ".cost_y_yaw_gain", cost_y_yaw_gain, 0.5);
-	parent->get_parameter_or(plugin_name_ + ".cost_y_lookahead_dist", m_cost_y_lookahead_dist, 0.5);
-	parent->get_parameter_or(plugin_name_ + ".cost_y_lookahead_time", cost_y_lookahead_time, 0.5);
-	parent->get_parameter_or(plugin_name_ + ".cost_yaw_gain", cost_yaw_gain, 0.5);
+	parent->get_parameter_or(plugin_name_ + ".cost_y_yaw_gain", cost_y_yaw_gain, 0.1);
+	parent->get_parameter_or(plugin_name_ + ".cost_y_lookahead_dist", m_cost_y_lookahead_dist, 0.0);
+	parent->get_parameter_or(plugin_name_ + ".cost_y_lookahead_time", cost_y_lookahead_time, 1.0);
+	parent->get_parameter_or(plugin_name_ + ".cost_yaw_gain", cost_yaw_gain, 1.0);
 	parent->get_parameter_or(plugin_name_ + ".low_pass_gain", low_pass_gain, 0.5);
 
 	parent->get_parameter_or(plugin_name_ + ".max_cost", max_cost, 0.9);
@@ -766,6 +770,12 @@ void NeoLocalPlanner::configure(const rclcpp_lifecycle::LifecycleNode::SharedPtr
 	parent->get_parameter_or(plugin_name_ + ".differential_drive", differential_drive, true);
 	parent->get_parameter_or(plugin_name_ + ".constrain_final", constrain_final, false);
 
+	// Variable manipulation
+	acc_lim_trans = acc_lim_x;
+	max_vel_trans = max_vel_x;
+	trans_stopped_vel = 0.5 * min_vel_trans;
+
+	// Setting up the costmap variables
 	costmap_ros_ = costmap_ros;
 	costmap_ = costmap_ros_->getCostmap();
 	tf_ = tf;
@@ -774,6 +784,7 @@ void NeoLocalPlanner::configure(const rclcpp_lifecycle::LifecycleNode::SharedPtr
 
 	m_base_frame = costmap_ros->getBaseFrameID();
 
+	// Creating odometery subscriber and local plan publisher
 	m_odom_sub = parent->create_subscription<nav_msgs::msg::Odometry>("/odom",  rclcpp::SystemDefaultsQoS(), std::bind(&NeoLocalPlanner::odomCallback,this,std::placeholders::_1));
 	m_local_plan_pub = parent->create_publisher<nav_msgs::msg::Path>("/local_plan", 1);
 
@@ -781,6 +792,7 @@ void NeoLocalPlanner::configure(const rclcpp_lifecycle::LifecycleNode::SharedPtr
 
 void NeoLocalPlanner::odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg)
 {
+	boost::mutex::scoped_lock lock(m_odometry_mutex);
 	m_odometry = msg;
 }
 
