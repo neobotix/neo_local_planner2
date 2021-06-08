@@ -35,6 +35,7 @@
 #include "../include/NeoLocalPlanner.h"
 
 #include <tf2/utils.h>
+#include "nav2_util/node_utils.hpp"
 #include <tf2_sensor_msgs/tf2_sensor_msgs.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <vector>
@@ -311,10 +312,11 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
 			obstacle_dist += delta_move;
 		}
 	}
+	m_local_plan_pub->publish(local_path);
+
 	obstacle_dist -= min_stop_dist;
 
 	// publish local plan
-	// m_local_plan_pub->publish(local_path);
 
 	// compute situational max velocities
 	const double max_trans_vel = fmax(max_vel_trans * (max_cost - center_cost) / max_cost, min_vel_trans);
@@ -598,13 +600,19 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
 }
 
 void NeoLocalPlanner::cleanup()
-{}
+{
+	m_local_plan_pub.reset();
+}
 
 void NeoLocalPlanner::activate()
-{}
+{
+	m_local_plan_pub->on_activate();
+}
 
 void NeoLocalPlanner::deactivate()
-{}
+{
+	m_local_plan_pub->on_deactivate();
+}
 
 bool NeoLocalPlanner::isGoalReached()
 {
