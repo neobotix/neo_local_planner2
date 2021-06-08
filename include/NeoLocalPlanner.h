@@ -142,7 +142,7 @@ private:
 	nav_msgs::msg::Odometry::SharedPtr m_odometry;
 
 	rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr m_odom_sub;
-	rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr m_local_plan_pub;
+  std::shared_ptr<rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Path>> m_local_plan_pub;
 
 	std::string m_global_frame = "map";
 	std::string m_local_frame = "odom";
