@@ -614,77 +614,27 @@ void NeoLocalPlanner::deactivate()
 	m_local_plan_pub->on_deactivate();
 }
 
-bool NeoLocalPlanner::isGoalReached()
+bool NeoLocalPlanner::reset_lastvel(nav_msgs::msg::Path m_global_plan, nav_msgs::msg::Path plan)
 {
-	boost::mutex::scoped_lock lock(m_odometry_mutex);
 
-	nav2_core::GoalChecker *goal_checker; 
-
-	geometry_msgs::msg::Pose current_pose; 
-	geometry_msgs::msg::Twist current_twist;
-
-	if(!m_odometry)
+	if(m_global_plan.poses.empty() || plan.poses.back().pose == m_global_plan.poses.back().pose)
 	{
-		std::cout<< "Waiting for Odometry" << std::endl;
 		return false;
 	}
-	if(m_global_plan.poses.empty())
+	else 
 	{
-		std::cout<< "Global Plan is empty" << std::endl;
+		m_last_control_values[0] = 0;
+		m_last_control_values[1] = 0;
+		m_last_control_values[2] = 0;
+		geometry_msgs::msg::Twist m_last_cmd_vel;
 		return true;
 	}
-
-	tf2::Stamped<tf2::Transform> global_to_local;
-	try {
-		auto msg = tf_->lookupTransform(m_local_frame, m_global_frame,  tf2::TimePointZero);
-		tf2::fromMsg(msg, global_to_local);
-	} catch(...) {
-		std::cout<< "lookupTransform Failed!" << std::endl;
-		return false;
-	}
-
-	tf2::Stamped<tf2::Transform> goal_pose_global;
-	tf2::fromMsg(m_global_plan.poses.back(), goal_pose_global);
-	// geometry_msgs::msg::Transform goal_pose_global_check;
-	geometry_msgs::msg::Pose goal_pose_global_check1;
-
-	auto goal_pose_global_check = tf2::toMsg(goal_pose_global);
-	goal_pose_global_check1.position.x = goal_pose_global_check.transform.translation.x;
-	goal_pose_global_check1.position.y = goal_pose_global_check.transform.translation.y;
-	goal_pose_global_check1.position.z = goal_pose_global_check.transform.translation.z;
-	goal_pose_global_check1.orientation.x = goal_pose_global_check.transform.rotation.x;
-	goal_pose_global_check1.orientation.y = goal_pose_global_check.transform.rotation.y;
-	goal_pose_global_check1.orientation.z = goal_pose_global_check.transform.rotation.z;
-	goal_pose_global_check1.orientation.w = goal_pose_global_check.transform.rotation.w;
-	const auto goal_pose_local = global_to_local * goal_pose_global;
-
-	// Checking is goal_reached
-	current_pose.position = m_odometry->pose.pose.position;
-	current_pose.orientation = m_odometry->pose.pose.orientation;
-	current_twist.linear = m_odometry->twist.twist.linear;
-	current_twist.angular = m_odometry->twist.twist.angular;
-
-	const bool is_reached = goal_checker->isGoalReached(goal_pose_global_check1, current_pose, current_twist);
-
-	const double xy_error = ::hypot(m_odometry->pose.pose.position.x - goal_pose_local.getOrigin().x(),
-									m_odometry->pose.pose.position.y - goal_pose_local.getOrigin().y());
 	
-	const double yaw_error = fabs(angles::shortest_angular_distance(tf2::getYaw(m_odometry->pose.pose.orientation),
-																	tf2::getYaw(goal_pose_local.getRotation())));
-
-	if(!m_is_goal_reached)
-	{
-		if(is_reached) {
-			std::cout<<"Goal reached: xy_error=" << xy_error << " [m], yaw_error=" << yaw_error << " [rad]"<<std::endl;
-		}
-		m_first_goal_reached_time =  rclcpp::Clock().now();
-	}
-	m_is_goal_reached = is_reached;
-	return is_reached && ( rclcpp::Clock().now() - m_first_goal_reached_time).seconds() >= goal_tune_time;
 }
 
 void NeoLocalPlanner::setPlan(const nav_msgs::msg::Path & plan)
 {
+	m_reset_lastvel = reset_lastvel(m_global_plan, plan);
 	m_global_plan = plan;
 }
 

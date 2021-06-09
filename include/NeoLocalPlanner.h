@@ -123,7 +123,7 @@ public:
 
 	void odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg);
 
-	bool isGoalReached();
+	bool reset_lastvel(nav_msgs::msg::Path m_global_plan, nav_msgs::msg::Path plan);
     	
 
 private:
@@ -214,6 +214,7 @@ protected:
 	double min_stop_dist = 0.0;
 	double emergency_acc_lim_x = 0.0;
 	bool enable_software_stop = false;
+	bool m_reset_lastvel = false;
 
 	
 };
