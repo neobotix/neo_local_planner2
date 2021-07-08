@@ -47,6 +47,7 @@
 #include <algorithm>
 
 #include "nav2_core/controller.hpp"
+#include "nav2_util/geometry_utils.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "pluginlib/class_loader.hpp"
 #include "pluginlib/class_list_macros.hpp"
@@ -80,7 +81,7 @@ public:
    * @param costmap_ros Costmap2DROS object of environment
    */
   void configure(
-    const rclcpp_lifecycle::LifecycleNode::SharedPtr & parent,
+    const rclcpp_lifecycle::LifecycleNode::WeakPtr & parent,
     std::string name, const std::shared_ptr<tf2_ros::Buffer> & tf,
     const std::shared_ptr<nav2_costmap_2d::Costmap2DROS> & costmap_ros) override;
 
@@ -113,18 +114,27 @@ public:
    */
   geometry_msgs::msg::TwistStamped computeVelocityCommands(
     const geometry_msgs::msg::PoseStamped & pose,
-    const geometry_msgs::msg::Twist & speed) override;
+    const geometry_msgs::msg::Twist & speed,
+    nav2_core::GoalChecker * goal_checker) override;
 
   /**
    * @brief nav2_core setPlan - Sets the global plan
    * @param path The global plan
    */
-  	void setPlan(const nav_msgs::msg::Path & path) override;
+  void setPlan(const nav_msgs::msg::Path & path) override;
+
+  /**
+   * @brief Limits the maximum linear speed of the robot.
+   * @param speed_limit expressed in absolute value (in m/s)
+   * or in percentage from maximum robot speed.
+   * @param percentage Setting speed limit in percentage if true
+   * or in absolute values in false case.
+   */
+  void setSpeedLimit(const double & speed_limit, const bool & percentage) override;
 
 	void odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg);
 
 	bool reset_lastvel(nav_msgs::msg::Path m_global_plan, nav_msgs::msg::Path plan);
-    	
 
 private:
 	std::shared_ptr<tf2_ros::Buffer> tf_;

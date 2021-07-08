@@ -171,7 +171,8 @@ double compute_max_line_cost(	nav2_costmap_2d::Costmap2D* cost_map_,
 
 geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
   const geometry_msgs::msg::PoseStamped & position,
-  const geometry_msgs::msg::Twist & speed)
+  const geometry_msgs::msg::Twist & speed,
+  nav2_core::GoalChecker * goal_checker)
 {
 	boost::mutex::scoped_lock lock(m_odometry_mutex);
 	geometry_msgs::msg::Twist cmd_vel;
@@ -638,95 +639,103 @@ void NeoLocalPlanner::setPlan(const nav_msgs::msg::Path & plan)
 	m_global_plan = plan;
 }
 
-void NeoLocalPlanner::configure(const rclcpp_lifecycle::LifecycleNode::SharedPtr & parent,  std::string name, const std::shared_ptr<tf2_ros::Buffer> & tf,  const std::shared_ptr<nav2_costmap_2d::Costmap2DROS> & costmap_ros)
+void NeoLocalPlanner::setSpeedLimit(
+  const double & speed_limit,
+  const bool & percentage)
 {
+  
+}
+
+void NeoLocalPlanner::configure(const rclcpp_lifecycle::LifecycleNode::WeakPtr & parent,  std::string name, const std::shared_ptr<tf2_ros::Buffer> & tf,  const std::shared_ptr<nav2_costmap_2d::Costmap2DROS> & costmap_ros)
+{
+	auto node = parent.lock();
 	plugin_name_ = name;
-	clock_ = parent->get_clock();
-	nav2_util::declare_parameter_if_not_declared(parent,plugin_name_ + ".acc_lim_x",rclcpp::ParameterValue(0.2));
-	nav2_util::declare_parameter_if_not_declared(parent,plugin_name_ + ".acc_lim_y",rclcpp::ParameterValue(0.2));
-	nav2_util::declare_parameter_if_not_declared(parent,plugin_name_ + ".acc_lim_theta",rclcpp::ParameterValue(0.2));
-	nav2_util::declare_parameter_if_not_declared(parent,plugin_name_ + ".acc_limit_trans",rclcpp::ParameterValue(0.2));
-	nav2_util::declare_parameter_if_not_declared(parent,plugin_name_ + ".min_vel_x",rclcpp::ParameterValue(0.2));
-	nav2_util::declare_parameter_if_not_declared(parent,plugin_name_ + ".max_vel_x",rclcpp::ParameterValue(0.2));
-	nav2_util::declare_parameter_if_not_declared(parent,plugin_name_ + ".min_vel_y",rclcpp::ParameterValue(0.2));
-	nav2_util::declare_parameter_if_not_declared(parent,plugin_name_ + ".max_vel_y",rclcpp::ParameterValue(0.2));
-	nav2_util::declare_parameter_if_not_declared(parent,plugin_name_ + ".min_rot_vel",rclcpp::ParameterValue(0.2));
-	nav2_util::declare_parameter_if_not_declared(parent,plugin_name_ + ".max_rot_vel",rclcpp::ParameterValue(0.2));
-	nav2_util::declare_parameter_if_not_declared(parent,plugin_name_ + ".min_vel_trans",rclcpp::ParameterValue(0.2));
-	nav2_util::declare_parameter_if_not_declared(parent,plugin_name_ + ".max_vel_trans",rclcpp::ParameterValue(0.2));
-	nav2_util::declare_parameter_if_not_declared(parent,plugin_name_ + ".rot_stopped_vel", rclcpp::ParameterValue(0.2));
-	nav2_util::declare_parameter_if_not_declared(parent,plugin_name_ + ".trans_stopped_vel",rclcpp::ParameterValue(0.2));
-	nav2_util::declare_parameter_if_not_declared(parent,plugin_name_ + ".yaw_goal_tolerance",rclcpp::ParameterValue(0.2));
-	nav2_util::declare_parameter_if_not_declared(parent,plugin_name_ + ".xy_goal_tolerance",rclcpp::ParameterValue(0.2));
+	clock_ = node->get_clock();
+	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".acc_lim_x",rclcpp::ParameterValue(0.2));
+	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".acc_lim_y",rclcpp::ParameterValue(0.2));
+	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".acc_lim_theta",rclcpp::ParameterValue(0.2));
+	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".acc_limit_trans",rclcpp::ParameterValue(0.2));
+	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".min_vel_x",rclcpp::ParameterValue(0.2));
+	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".max_vel_x",rclcpp::ParameterValue(0.2));
+	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".min_vel_y",rclcpp::ParameterValue(0.2));
+	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".max_vel_y",rclcpp::ParameterValue(0.2));
+	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".min_rot_vel",rclcpp::ParameterValue(0.2));
+	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".max_rot_vel",rclcpp::ParameterValue(0.2));
+	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".min_vel_trans",rclcpp::ParameterValue(0.2));
+	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".max_vel_trans",rclcpp::ParameterValue(0.2));
+	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".rot_stopped_vel", rclcpp::ParameterValue(0.2));
+	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".trans_stopped_vel",rclcpp::ParameterValue(0.2));
+	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".yaw_goal_tolerance",rclcpp::ParameterValue(0.2));
+	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".xy_goal_tolerance",rclcpp::ParameterValue(0.2));
 
-	nav2_util::declare_parameter_if_not_declared(parent,plugin_name_ + ".goal_tune_time",rclcpp::ParameterValue(0.2));
-	nav2_util::declare_parameter_if_not_declared(parent,plugin_name_ + ".lookahead_time",rclcpp::ParameterValue(0.2));
-	nav2_util::declare_parameter_if_not_declared(parent,plugin_name_ + ".lookahead_dist",rclcpp::ParameterValue(0.2));
-	nav2_util::declare_parameter_if_not_declared(parent,plugin_name_ + ".start_yaw_error",rclcpp::ParameterValue(0.2));
-	nav2_util::declare_parameter_if_not_declared(parent,plugin_name_ + ".pos_x_gain",rclcpp::ParameterValue(0.2));
-	nav2_util::declare_parameter_if_not_declared(parent,plugin_name_ + ".pos_y_gain",rclcpp::ParameterValue(0.2));
-	nav2_util::declare_parameter_if_not_declared(parent,plugin_name_ + ".pos_y_yaw_gain",rclcpp::ParameterValue(0.2));
-	nav2_util::declare_parameter_if_not_declared(parent,plugin_name_ + ".yaw_gain",rclcpp::ParameterValue(0.2));
-	nav2_util::declare_parameter_if_not_declared(parent,plugin_name_ + ".static_yaw_gain",rclcpp::ParameterValue(0.2));
-	nav2_util::declare_parameter_if_not_declared(parent,plugin_name_ + ".cost_x_gain",rclcpp::ParameterValue(0.2));
-	nav2_util::declare_parameter_if_not_declared(parent,plugin_name_ + ".cost_y_gain",rclcpp::ParameterValue(0.2));
-	nav2_util::declare_parameter_if_not_declared(parent,plugin_name_ + ".cost_y_yaw_gain",rclcpp::ParameterValue(0.2));
-	nav2_util::declare_parameter_if_not_declared(parent,plugin_name_ + ".cost_y_lookahead_dist", rclcpp::ParameterValue(0.2));
-	nav2_util::declare_parameter_if_not_declared(parent,plugin_name_ + ".cost_y_lookahead_time",rclcpp::ParameterValue(0.2));
-	nav2_util::declare_parameter_if_not_declared(parent,plugin_name_ + ".cost_yaw_gain",rclcpp::ParameterValue(0.2));
-	nav2_util::declare_parameter_if_not_declared(parent,plugin_name_ + ".low_pass_gain",rclcpp::ParameterValue(0.2));
+	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".goal_tune_time",rclcpp::ParameterValue(0.2));
+	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".lookahead_time",rclcpp::ParameterValue(0.2));
+	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".lookahead_dist",rclcpp::ParameterValue(0.2));
+	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".start_yaw_error",rclcpp::ParameterValue(0.2));
+	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".pos_x_gain",rclcpp::ParameterValue(0.2));
+	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".pos_y_gain",rclcpp::ParameterValue(0.2));
+	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".pos_y_yaw_gain",rclcpp::ParameterValue(0.2));
+	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".yaw_gain",rclcpp::ParameterValue(0.2));
+	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".static_yaw_gain",rclcpp::ParameterValue(0.2));
+	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".cost_x_gain",rclcpp::ParameterValue(0.2));
+	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".cost_y_gain",rclcpp::ParameterValue(0.2));
+	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".cost_y_yaw_gain",rclcpp::ParameterValue(0.2));
+	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".cost_y_lookahead_dist", rclcpp::ParameterValue(0.2));
+	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".cost_y_lookahead_time",rclcpp::ParameterValue(0.2));
+	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".cost_yaw_gain",rclcpp::ParameterValue(0.2));
+	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".low_pass_gain",rclcpp::ParameterValue(0.2));
 
-	nav2_util::declare_parameter_if_not_declared(parent,plugin_name_ + ".max_cost",rclcpp::ParameterValue(0.2));
-	nav2_util::declare_parameter_if_not_declared(parent,plugin_name_ + ".max_curve_vel",rclcpp::ParameterValue(0.2));
-	nav2_util::declare_parameter_if_not_declared(parent,plugin_name_ + ".max_goal_dist",rclcpp::ParameterValue(0.2));
-	nav2_util::declare_parameter_if_not_declared(parent,plugin_name_ + ".max_backup_dist", rclcpp::ParameterValue(0.2));
-	nav2_util::declare_parameter_if_not_declared(parent,plugin_name_ + ".min_stop_dist",rclcpp::ParameterValue(0.2));
-	nav2_util::declare_parameter_if_not_declared(parent,plugin_name_ + ".emergency_acc_lim_x",rclcpp::ParameterValue(0.2));
-	nav2_util::declare_parameter_if_not_declared(parent,plugin_name_ + ".differential_drive", rclcpp::ParameterValue(true));
-	nav2_util::declare_parameter_if_not_declared(parent,plugin_name_ + ".constrain_final", rclcpp::ParameterValue(false));
+	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".max_cost",rclcpp::ParameterValue(0.2));
+	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".max_curve_vel",rclcpp::ParameterValue(0.2));
+	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".max_goal_dist",rclcpp::ParameterValue(0.2));
+	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".max_backup_dist", rclcpp::ParameterValue(0.2));
+	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".min_stop_dist",rclcpp::ParameterValue(0.2));
+	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".emergency_acc_lim_x",rclcpp::ParameterValue(0.2));
+	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".differential_drive", rclcpp::ParameterValue(true));
+	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".constrain_final", rclcpp::ParameterValue(false));
 
-	parent->get_parameter_or(plugin_name_ + ".acc_lim_x", acc_lim_x, 0.5);
-	parent->get_parameter_or(plugin_name_ + ".acc_lim_y", acc_lim_y, 0.5);
-	parent->get_parameter_or(plugin_name_ + ".acc_lim_theta", acc_lim_theta, 0.5);
-	parent->get_parameter_or(plugin_name_ + ".acc_limit_trans", acc_lim_trans, 0.5);
-	parent->get_parameter_or(plugin_name_ + ".min_vel_x", min_vel_x, -0.1);
-	parent->get_parameter_or(plugin_name_ + ".max_vel_x", max_vel_x, 0.5);
-	parent->get_parameter_or(plugin_name_ + ".min_vel_y", min_vel_y, -0.5);
-	parent->get_parameter_or(plugin_name_ + ".max_vel_y", max_vel_y, 0.5);
-	parent->get_parameter_or(plugin_name_ + ".min_rot_vel", min_vel_theta, 0.1);
-	parent->get_parameter_or(plugin_name_ + ".max_rot_vel", max_vel_theta, 0.5);
-	parent->get_parameter_or(plugin_name_ + ".min_trans_vel", min_vel_trans, 0.1);
-	parent->get_parameter_or(plugin_name_ + ".max_trans_vel", max_vel_trans, 0.5);
-	parent->get_parameter_or(plugin_name_ + ".rot_stopped_vel", theta_stopped_vel, 0.05);
-	parent->get_parameter_or(plugin_name_ + ".trans_stopped_vel", trans_stopped_vel, 0.05);
-	parent->get_parameter_or(plugin_name_ + ".yaw_goal_tolerance", yaw_goal_tolerance, 0.02);
-	parent->get_parameter_or(plugin_name_ + ".xy_goal_tolerance", xy_goal_tolerance, 0.1);
+	node->get_parameter_or(plugin_name_ + ".acc_lim_x", acc_lim_x, 0.5);
+	node->get_parameter_or(plugin_name_ + ".acc_lim_y", acc_lim_y, 0.5);
+	node->get_parameter_or(plugin_name_ + ".acc_lim_theta", acc_lim_theta, 0.5);
+	node->get_parameter_or(plugin_name_ + ".acc_limit_trans", acc_lim_trans, 0.5);
+	node->get_parameter_or(plugin_name_ + ".min_vel_x", min_vel_x, -0.1);
+	node->get_parameter_or(plugin_name_ + ".max_vel_x", max_vel_x, 0.5);
+	node->get_parameter_or(plugin_name_ + ".min_vel_y", min_vel_y, -0.5);
+	node->get_parameter_or(plugin_name_ + ".max_vel_y", max_vel_y, 0.5);
+	node->get_parameter_or(plugin_name_ + ".min_rot_vel", min_vel_theta, 0.1);
+	node->get_parameter_or(plugin_name_ + ".max_rot_vel", max_vel_theta, 0.5);
+	node->get_parameter_or(plugin_name_ + ".min_trans_vel", min_vel_trans, 0.1);
+	node->get_parameter_or(plugin_name_ + ".max_trans_vel", max_vel_trans, 0.5);
+	node->get_parameter_or(plugin_name_ + ".rot_stopped_vel", theta_stopped_vel, 0.05);
+	node->get_parameter_or(plugin_name_ + ".trans_stopped_vel", trans_stopped_vel, 0.05);
+	node->get_parameter_or(plugin_name_ + ".yaw_goal_tolerance", yaw_goal_tolerance, 0.02);
+	node->get_parameter_or(plugin_name_ + ".xy_goal_tolerance", xy_goal_tolerance, 0.1);
 
-	parent->get_parameter_or(plugin_name_ + ".goal_tune_time", goal_tune_time, 0.5);
-	parent->get_parameter_or(plugin_name_ + ".lookahead_time", lookahead_time, 0.5);
-	parent->get_parameter_or(plugin_name_ + ".lookahead_dist", m_lookahead_dist, 0.5);
-	parent->get_parameter_or(plugin_name_ + ".start_yaw_error", start_yaw_error, 0.2);
-	parent->get_parameter_or(plugin_name_ + ".pos_x_gain", pos_x_gain, 1.0);
-	parent->get_parameter_or(plugin_name_ + ".pos_y_gain", pos_y_gain, 1.0);
-	parent->get_parameter_or(plugin_name_ + ".pos_y_yaw_gain", pos_y_yaw_gain, 1.0);
-	parent->get_parameter_or(plugin_name_ + ".yaw_gain", yaw_gain, 1.0);
-	parent->get_parameter_or(plugin_name_ + ".static_yaw_gain", static_yaw_gain, 3.0);
-	parent->get_parameter_or(plugin_name_ + ".cost_x_gain", cost_x_gain, 0.1);
-	parent->get_parameter_or(plugin_name_ + ".cost_y_gain", cost_y_gain, 0.1);
-	parent->get_parameter_or(plugin_name_ + ".cost_y_yaw_gain", cost_y_yaw_gain, 0.1);
-	parent->get_parameter_or(plugin_name_ + ".cost_y_lookahead_dist", m_cost_y_lookahead_dist, 0.0);
-	parent->get_parameter_or(plugin_name_ + ".cost_y_lookahead_time", cost_y_lookahead_time, 1.0);
-	parent->get_parameter_or(plugin_name_ + ".cost_yaw_gain", cost_yaw_gain, 1.0);
-	parent->get_parameter_or(plugin_name_ + ".low_pass_gain", low_pass_gain, 0.5);
+	node->get_parameter_or(plugin_name_ + ".goal_tune_time", goal_tune_time, 0.5);
+	node->get_parameter_or(plugin_name_ + ".lookahead_time", lookahead_time, 0.5);
+	node->get_parameter_or(plugin_name_ + ".lookahead_dist", m_lookahead_dist, 0.5);
+	node->get_parameter_or(plugin_name_ + ".start_yaw_error", start_yaw_error, 0.2);
+	node->get_parameter_or(plugin_name_ + ".pos_x_gain", pos_x_gain, 1.0);
+	node->get_parameter_or(plugin_name_ + ".pos_y_gain", pos_y_gain, 1.0);
+	node->get_parameter_or(plugin_name_ + ".pos_y_yaw_gain", pos_y_yaw_gain, 1.0);
+	node->get_parameter_or(plugin_name_ + ".yaw_gain", yaw_gain, 1.0);
+	node->get_parameter_or(plugin_name_ + ".static_yaw_gain", static_yaw_gain, 3.0);
+	node->get_parameter_or(plugin_name_ + ".cost_x_gain", cost_x_gain, 0.1);
+	node->get_parameter_or(plugin_name_ + ".cost_y_gain", cost_y_gain, 0.1);
+	node->get_parameter_or(plugin_name_ + ".cost_y_yaw_gain", cost_y_yaw_gain, 0.1);
+	node->get_parameter_or(plugin_name_ + ".cost_y_lookahead_dist", m_cost_y_lookahead_dist, 0.0);
+	node->get_parameter_or(plugin_name_ + ".cost_y_lookahead_time", cost_y_lookahead_time, 1.0);
+	node->get_parameter_or(plugin_name_ + ".cost_yaw_gain", cost_yaw_gain, 1.0);
+	node->get_parameter_or(plugin_name_ + ".low_pass_gain", low_pass_gain, 0.5);
 
-	parent->get_parameter_or(plugin_name_ + ".max_cost", max_cost, 0.9);
-	parent->get_parameter_or(plugin_name_ + ".max_curve_vel", max_curve_vel, 0.2);
-	parent->get_parameter_or(plugin_name_ + ".max_goal_dist", max_goal_dist, 0.5);
-	parent->get_parameter_or(plugin_name_ + ".max_backup_dist", max_backup_dist, 0.5);
-	parent->get_parameter_or(plugin_name_ + ".min_stop_dist", min_stop_dist, 0.5);
-	parent->get_parameter_or(plugin_name_ + ".emergency_acc_lim_x", emergency_acc_lim_x, 0.5);
-	parent->get_parameter_or(plugin_name_ + ".differential_drive", differential_drive, true);
-	parent->get_parameter_or(plugin_name_ + ".constrain_final", constrain_final, false);
+	node->get_parameter_or(plugin_name_ + ".max_cost", max_cost, 0.9);
+	node->get_parameter_or(plugin_name_ + ".max_curve_vel", max_curve_vel, 0.2);
+	node->get_parameter_or(plugin_name_ + ".max_goal_dist", max_goal_dist, 0.5);
+	node->get_parameter_or(plugin_name_ + ".max_backup_dist", max_backup_dist, 0.5);
+	node->get_parameter_or(plugin_name_ + ".min_stop_dist", min_stop_dist, 0.5);
+	node->get_parameter_or(plugin_name_ + ".emergency_acc_lim_x", emergency_acc_lim_x, 0.5);
+	node->get_parameter_or(plugin_name_ + ".differential_drive", differential_drive, true);
+	node->get_parameter_or(plugin_name_ + ".constrain_final", constrain_final, false);
 
 	// Variable manipulation
 	acc_lim_trans = acc_lim_x;
@@ -738,13 +747,13 @@ void NeoLocalPlanner::configure(const rclcpp_lifecycle::LifecycleNode::SharedPtr
 	costmap_ = costmap_ros_->getCostmap();
 	tf_ = tf;
 	plugin_name_ = name;
-	logger_ = parent->get_logger();
+	logger_ = node->get_logger();
 
 	m_base_frame = costmap_ros->getBaseFrameID();
 
 	// Creating odometery subscriber and local plan publisher
-	m_odom_sub = parent->create_subscription<nav_msgs::msg::Odometry>("/odom",  rclcpp::SystemDefaultsQoS(), std::bind(&NeoLocalPlanner::odomCallback,this,std::placeholders::_1));
-	m_local_plan_pub = parent->create_publisher<nav_msgs::msg::Path>("/local_plan", 1);
+	m_odom_sub = node->create_subscription<nav_msgs::msg::Odometry>("/odom",  rclcpp::SystemDefaultsQoS(), std::bind(&NeoLocalPlanner::odomCallback,this,std::placeholders::_1));
+	m_local_plan_pub = node->create_publisher<nav_msgs::msg::Path>("/local_plan", 1);
 
 }
 
