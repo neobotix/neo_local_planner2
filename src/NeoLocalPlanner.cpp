@@ -43,7 +43,6 @@
 #include "nav2_core/goal_checker.hpp"
 #include "pluginlib/class_list_macros.hpp"
 #include <algorithm>
-#include <nav_2d_utils/tf_help.hpp>
 #include <tf2_eigen/tf2_eigen.h>
 
 
@@ -693,6 +692,8 @@ void NeoLocalPlanner::configure(const rclcpp_lifecycle::LifecycleNode::WeakPtr &
 	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".emergency_acc_lim_x",rclcpp::ParameterValue(0.2));
 	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".differential_drive", rclcpp::ParameterValue(true));
 	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".constrain_final", rclcpp::ParameterValue(false));
+	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".odom_topic", rclcpp::ParameterValue("/odom"));
+	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".local_plan_topic", rclcpp::ParameterValue("/local_plan"));
 
 	node->get_parameter_or(plugin_name_ + ".acc_lim_x", acc_lim_x, 0.5);
 	node->get_parameter_or(plugin_name_ + ".acc_lim_y", acc_lim_y, 0.5);
@@ -737,6 +738,9 @@ void NeoLocalPlanner::configure(const rclcpp_lifecycle::LifecycleNode::WeakPtr &
 	node->get_parameter_or(plugin_name_ + ".differential_drive", differential_drive, true);
 	node->get_parameter_or(plugin_name_ + ".constrain_final", constrain_final, false);
 
+	node->get_parameter(plugin_name_ + ".odom_topic", odom_topic);
+	node->get_parameter(plugin_name_ + ".local_plan_topic", local_plan_topic);
+
 	// Variable manipulation
 	acc_lim_trans = acc_lim_x;
 	max_vel_trans = max_vel_x;
@@ -752,8 +756,8 @@ void NeoLocalPlanner::configure(const rclcpp_lifecycle::LifecycleNode::WeakPtr &
 	m_base_frame = costmap_ros->getBaseFrameID();
 
 	// Creating odometery subscriber and local plan publisher
-	m_odom_sub = node->create_subscription<nav_msgs::msg::Odometry>("/odom",  rclcpp::SystemDefaultsQoS(), std::bind(&NeoLocalPlanner::odomCallback,this,std::placeholders::_1));
-	m_local_plan_pub = node->create_publisher<nav_msgs::msg::Path>("/local_plan", 1);
+	m_odom_sub = node->create_subscription<nav_msgs::msg::Odometry>(odom_topic,  rclcpp::SystemDefaultsQoS(), std::bind(&NeoLocalPlanner::odomCallback,this,std::placeholders::_1));
+	m_local_plan_pub = node->create_publisher<nav_msgs::msg::Path>(local_plan_topic, 1);
 
 }
 

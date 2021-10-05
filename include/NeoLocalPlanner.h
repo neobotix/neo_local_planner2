@@ -48,6 +48,7 @@
 
 #include "nav2_core/controller.hpp"
 #include "nav2_util/geometry_utils.hpp"
+#include "nav2_util/lifecycle_node.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "pluginlib/class_loader.hpp"
 #include "pluginlib/class_list_macros.hpp"
@@ -225,6 +226,8 @@ protected:
 	double emergency_acc_lim_x = 0.0;
 	bool enable_software_stop = false;
 	bool m_reset_lastvel = false;
+	std::string odom_topic = "odom";
+	std::string local_plan_topic = "local_plan";
 
 	
 };
