@@ -688,6 +688,8 @@ void NeoLocalPlanner::configure(const rclcpp_lifecycle::LifecycleNode::WeakPtr &
 	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".constrain_final", rclcpp::ParameterValue(false));
 	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".odom_topic", rclcpp::ParameterValue("/odom"));
 	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".local_plan_topic", rclcpp::ParameterValue("/local_plan"));
+	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".local_frame", rclcpp::ParameterValue("odom"));
+	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".base_frame", rclcpp::ParameterValue("base_link"));
 
 	node->get_parameter_or(plugin_name_ + ".acc_lim_x", acc_lim_x, 0.5);
 	node->get_parameter_or(plugin_name_ + ".acc_lim_y", acc_lim_y, 0.5);
@@ -734,6 +736,9 @@ void NeoLocalPlanner::configure(const rclcpp_lifecycle::LifecycleNode::WeakPtr &
 
 	node->get_parameter(plugin_name_ + ".odom_topic", odom_topic);
 	node->get_parameter(plugin_name_ + ".local_plan_topic", local_plan_topic);
+
+	node->get_parameter(plugin_name_ + ".local_frame", m_local_frame);
+	node->get_parameter(plugin_name_ + ".base_frame", m_base_frame);
 
 	// Variable manipulation
 	acc_lim_trans = acc_lim_x;

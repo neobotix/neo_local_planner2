@@ -156,8 +156,8 @@ private:
   std::shared_ptr<rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Path>> m_local_plan_pub;
 
 	std::string m_global_frame = "map";
-	std::string m_local_frame = "odom";
-	std::string m_base_frame = "base_link";
+	std::string m_local_frame;
+	std::string m_base_frame;
 
 	enum state_t {
 		STATE_IDLE,
