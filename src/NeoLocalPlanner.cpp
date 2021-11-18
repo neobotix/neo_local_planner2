@@ -178,8 +178,8 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
 
 	if(m_global_plan.poses.empty())
 	{
-		// ROS_WARN_NAMED("NeoLocalPlanner", "Global plan is empty!");
-		// return false;
+		RCLCPP_WARN_THROTTLE(logger_, *clock_, 1.0, 
+			"Global Plan is empty");
 	}
 
 	// compute delta time
@@ -192,10 +192,8 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
 		geometry_msgs::msg::TransformStamped msg = tf_->lookupTransform(m_local_frame, m_global_frame, tf2::TimePointZero);
 		tf2::fromMsg(msg, global_to_local);
 	} catch(...) {
-		// ROS_WARN_NAMED("NeoLocalPlanner", "lookupTransform(m_local_frame, m_global_frame) failed");
-		// return false;
-	std::cout<<"lookupTransform(m_local_frame, m_global_frame) failed"<<std::endl;
-
+		RCLCPP_WARN_THROTTLE(logger_, *clock_, 1.0, 
+			"lookupTransform(m_local_frame, m_global_frame) failed");
 	}
 
 	// transform plan to local frame (odom)
@@ -525,10 +523,10 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
 		// we are stuck
 		m_state = state_t::STATE_STUCK;
 
-		std::cout<<"We are stuck"<<std::endl;
-		// ROS_WARN_NAMED("NeoLocalPlanner", "We are stuck: yaw_error=%f, obstacle_dist=%f, obstacle_cost=%f, delta_cost_x=%f",
-						// yaw_error, obstacle_dist, obstacle_cost, delta_cost_x);
-		// return false;
+		RCLCPP_WARN_THROTTLE(logger_, *clock_, 1.0, 
+			"We are stuck: yaw_error=%f, obstacle_dist=%f, obstacle_cost=%f, delta_cost_x=%f",
+						yaw_error, obstacle_dist, obstacle_cost, delta_cost_x);
+
 		geometry_msgs::msg::TwistStamped cmd_vel_stuck;
   	cmd_vel_stuck.header.stamp = clock_->now();
 		cmd_vel_stuck.header.frame_id = position.header.frame_id;
@@ -579,10 +577,6 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
 	cmd_vel.angular.y = 0;
 	cmd_vel.angular.z = fmin(fmax(control_yawrate, -max_vel_theta), max_vel_theta);
 
-	if(m_update_counter % 20 == 0) {
-		// ROS_INFO_NAMED("NeoLocalPlanner", "dt=%f, pos_error=(%f, %f), yaw_error=%f, cost=%f, obstacle_dist=%f, obstacle_cost=%f, delta_cost=(%f, %f, %f), state=%d, cmd_vel=(%f, %f), cmd_yawrate=%f",
-						// dt, pos_error.x(), pos_error.y(), yaw_error, center_cost, obstacle_dist, obstacle_cost, delta_cost_x, delta_cost_y, delta_cost_yaw, m_state, control_vel_x, control_vel_y, control_yawrate);
-	}
 	m_last_time = time_now;
 	m_last_control_values[0] = control_vel_x;
 	m_last_control_values[1] = control_vel_y;
