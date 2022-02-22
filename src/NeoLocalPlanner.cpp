@@ -175,6 +175,7 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
 {
 	boost::mutex::scoped_lock lock(m_odometry_mutex);
 	geometry_msgs::msg::Twist cmd_vel;
+	geometry_msgs::msg::TwistStamped cmd_vel_final;
 
 	if(m_global_plan.poses.empty())
 	{
@@ -391,6 +392,14 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
 		yaw_error = angles::shortest_angular_distance(actual_yaw, target_yaw);
 	} else {
 		yaw_error = angles::shortest_angular_distance(actual_yaw + 3.14, target_yaw); 
+	}
+
+	// Condition to check for a spotaneous change in the goal
+	if (m_reset_lastvel && speed.linear.x != 0.0 && 
+		speed.linear.y != 0.0 && speed.angular.z != 0.0 &&
+		fabs(yaw_error) > M_PI / 6) {
+		cmd_vel_final.twist = m_last_cmd_vel;
+		return cmd_vel_final;
 	}
 
 	// compute errors
@@ -657,11 +666,10 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
 	m_last_cmd_vel = cmd_vel;
 
 	m_update_counter++;
-	geometry_msgs::msg::TwistStamped cmd_vel_final;
-  	cmd_vel_final.header.stamp = clock_->now();
+	cmd_vel_final.header.stamp = clock_->now();
 	cmd_vel_final.header.frame_id = position.header.frame_id;
-  	cmd_vel_final.twist.linear = cmd_vel.linear;
-  	cmd_vel_final.twist.angular = cmd_vel.angular;
+	cmd_vel_final.twist.linear = cmd_vel.linear;
+	cmd_vel_final.twist.angular = cmd_vel.angular;
 
   return cmd_vel_final;
 }
@@ -693,7 +701,7 @@ bool NeoLocalPlanner::reset_lastvel(nav_msgs::msg::Path m_global_plan, nav_msgs:
 		m_last_control_values[0] = 0;
 		m_last_control_values[1] = 0;
 		m_last_control_values[2] = 0;
-		geometry_msgs::msg::Twist m_last_cmd_vel;
+		m_last_cmd_vel = geometry_msgs::msg::Twist();
 		count = 0;
 		return true;
 	}
