@@ -197,6 +197,7 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
 			"lookupTransform(m_local_frame, m_global_frame) failed");
 	}
 
+	// get latest global to local transform (map to robot)
 	tf2::Stamped<tf2::Transform> global_to_robot;
 	try {
 		geometry_msgs::msg::TransformStamped msg = tf_->lookupTransform("base_link", m_global_frame, tf2::TimePointZero);
@@ -614,15 +615,11 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
 	control_yawrate = control_yawrate * low_pass_gain + m_last_control_values[2] * (1 - low_pass_gain);
 
 	// apply acceleration limits
-	// apply_acceleratiion_limits(control_vel_x, control_vel_y, control_yawrate, 
-	// 	m_last_cmd_vel, is_emergency_brake, m_robot_direction, dt);
 
 	if(m_robot_direction == -1.0) {
-		if(!is_goal_target){
-			control_vel_x = m_robot_direction * fmin(fabs(control_vel_x), fabs(m_last_cmd_vel.linear.x + acc_lim_x * dt));
+			control_vel_x = fmin(fabs(control_vel_x), fabs(m_last_cmd_vel.linear.x + acc_lim_x * dt));
 			control_vel_x = m_robot_direction * fmax(fabs(control_vel_x), fabs(m_last_cmd_vel.linear.x - 
 			(is_emergency_brake ?  m_robot_direction * emergency_acc_lim_x : acc_lim_x) * dt));
-		}
 	} else {
 		control_vel_x = fmax(fmin(control_vel_x, m_last_cmd_vel.linear.x + acc_lim_x * dt),
 							m_last_cmd_vel.linear.x - (is_emergency_brake ? emergency_acc_lim_x : acc_lim_x) * dt);
@@ -654,10 +651,12 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
 
 	// fill return data
 	if(m_robot_direction == -1.0) {
-		cmd_vel.linear.x = fmax(fmin(control_vel_x, 0.2), m_robot_direction*max_vel_x);
+		cmd_vel.linear.x = fmax(fmin(control_vel_x, m_robot_direction * min_vel_x),
+		 m_robot_direction * max_vel_x);
 	}
 	else {
-		cmd_vel.linear.x = fmin(fmax(control_vel_x, -0.2), max_vel_x);
+		cmd_vel.linear.x = fmin(fmax(control_vel_x, min_vel_x),
+		 max_vel_x);
 	}
 
 	cmd_vel.linear.y = fmin(fmax(control_vel_y, min_vel_y), max_vel_y);
@@ -736,7 +735,6 @@ void NeoLocalPlanner::configure(const rclcpp_lifecycle::LifecycleNode::WeakPtr &
 	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".acc_lim_x",rclcpp::ParameterValue(0.2));
 	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".acc_lim_y",rclcpp::ParameterValue(0.2));
 	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".acc_lim_theta",rclcpp::ParameterValue(0.2));
-	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".acc_limit_trans",rclcpp::ParameterValue(0.2));
 	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".min_vel_x",rclcpp::ParameterValue(0.2));
 	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".max_vel_x",rclcpp::ParameterValue(0.2));
 	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".min_vel_y",rclcpp::ParameterValue(0.2));
@@ -784,7 +782,6 @@ void NeoLocalPlanner::configure(const rclcpp_lifecycle::LifecycleNode::WeakPtr &
 	node->get_parameter_or(plugin_name_ + ".acc_lim_x", acc_lim_x, 0.5);
 	node->get_parameter_or(plugin_name_ + ".acc_lim_y", acc_lim_y, 0.5);
 	node->get_parameter_or(plugin_name_ + ".acc_lim_theta", acc_lim_theta, 0.5);
-	node->get_parameter_or(plugin_name_ + ".acc_limit_trans", acc_lim_trans, 0.5);
 	node->get_parameter_or(plugin_name_ + ".min_vel_x", min_vel_x, -0.1);
 	node->get_parameter_or(plugin_name_ + ".max_vel_x", max_vel_x, 0.5);
 	node->get_parameter_or(plugin_name_ + ".min_vel_y", min_vel_y, -0.5);
@@ -831,7 +828,6 @@ void NeoLocalPlanner::configure(const rclcpp_lifecycle::LifecycleNode::WeakPtr &
 	node->get_parameter(plugin_name_ + ".base_frame", m_base_frame);
 
 	// Variable manipulation
-	acc_lim_trans = acc_lim_x;
 	max_vel_trans = max_vel_x;
 	trans_stopped_vel = 0.5 * min_vel_trans;
 
