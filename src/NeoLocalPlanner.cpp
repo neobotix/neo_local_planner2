@@ -617,9 +617,11 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
 	// apply acceleration limits
 
 	if(m_robot_direction == -1.0) {
+		if(!is_goal_target) {
 			control_vel_x = fmin(fabs(control_vel_x), fabs(m_last_cmd_vel.linear.x + acc_lim_x * dt));
 			control_vel_x = m_robot_direction * fmax(fabs(control_vel_x), fabs(m_last_cmd_vel.linear.x - 
 			(is_emergency_brake ?  m_robot_direction * emergency_acc_lim_x : acc_lim_x) * dt));
+		}
 	} else {
 		control_vel_x = fmax(fmin(control_vel_x, m_last_cmd_vel.linear.x + acc_lim_x * dt),
 							m_last_cmd_vel.linear.x - (is_emergency_brake ? emergency_acc_lim_x : acc_lim_x) * dt);
@@ -633,24 +635,8 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
 	control_yawrate = fmin(control_yawrate, m_last_cmd_vel.angular.z + acc_lim_theta * dt);
 	control_yawrate = fmax(control_yawrate, m_last_cmd_vel.angular.z - acc_lim_theta * dt);
 
-
-		// constrain velocity after goal reached
-	if(constrain_final && m_is_goal_reached)
-	{
-		tf2::Vector3 direction(m_last_control_values[0], m_last_control_values[1], m_last_control_values[2]);
-		if(direction.length() != 0)
-		{
-			direction.normalize();
-			const double dist = direction.dot(tf2::Vector3(control_vel_x, control_vel_y, control_yawrate));
-			const auto control = direction * dist;
-			control_vel_x = control[0];
-			control_vel_y = control[1];
-			control_yawrate = control[2];
-		}
-	}
-
 	// fill return data
-	if(m_robot_direction == -1.0) {
+	if (m_robot_direction == -1.0) {
 		cmd_vel.linear.x = fmax(fmin(control_vel_x, m_robot_direction * min_vel_x),
 		 m_robot_direction * max_vel_x);
 	}
