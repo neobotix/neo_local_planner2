@@ -229,6 +229,14 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
 
 		m_robot_direction = reverse_path >= 0.0 ? 1.0 : -1.0;
 		count++;
+
+		if(m_robot_direction == -1.0 && acc_lim_x > 0.0) {
+			acc_lim_x = -1.0 * acc_lim_x;
+		} 
+
+		if(m_robot_direction == 1.0 && acc_lim_x < 0.0) {
+			acc_lim_x = -1.0 * acc_lim_x;
+		} 
 	}
 
 	// get latest local pose
@@ -259,12 +267,10 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
 
 	const tf2::Transform actual_pose = tf2::Transform(createQuaternionFromYaw(actual_yaw), actual_pos);
 
-
 	// compute cost gradients
 	const double delta_x = 0.3;
 	const double delta_y = 0.2;
 	const double delta_yaw = 0.1;
-
 
 	const double center_cost = get_cost(costmap_, actual_pos);
 	const double delta_cost_x = (
@@ -399,6 +405,7 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
 		speed.linear.y != 0.0 && speed.angular.z != 0.0 &&
 		fabs(yaw_error) > M_PI / 6) {
 		cmd_vel_final.twist = m_last_cmd_vel;
+		m_reset_lastvel = false;
 		return cmd_vel_final;
 	}
 
@@ -440,14 +447,15 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
 		// limit velocity when approaching goal position
 		if(fabs(start_vel_x) > 0)	{
 			const double stop_accel = 0.8 * acc_lim_x;
-			const double stop_time = sqrt(2 * fmax(fabs(goal_dist), 0) / stop_accel);
+			const double stop_time = sqrt(2 * fmax(fabs(goal_dist), 0) / fabs(stop_accel));
 
 			if(m_robot_direction == -1.0) {
-				const double max_vel_x = m_robot_direction * fmax(stop_accel * stop_time, 0.2);
+				const double max_vel_x = m_robot_direction * fmax(fabs(stop_accel) * stop_time, min_vel_trans);
 				control_vel_x = m_robot_direction * fmin(fabs(control_vel_x), fabs(max_vel_x));	
 			} else {
 				const double max_vel_x = fmax(stop_accel * stop_time, min_vel_trans);
 				control_vel_x = fmin(control_vel_x, max_vel_x);
+				
 			}
 		}
 
@@ -493,7 +501,6 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
 	{
 		m_state = state_t::STATE_IDLE;
 	}
-
 	if(differential_drive)
 	{
 		if(fabs(start_vel_x) > (m_state == state_t::STATE_TRANSLATING ?
@@ -601,6 +608,7 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
 	is_emergency_brake = is_emergency_brake && fabs(control_vel_x) >= 0;
 
 	// apply low pass filter
+
 	control_vel_x = control_vel_x * low_pass_gain + m_last_control_values[0] * (1 - low_pass_gain);
 	control_vel_y = control_vel_y * low_pass_gain + m_last_control_values[1] * (1 - low_pass_gain);
 	control_yawrate = control_yawrate * low_pass_gain + m_last_control_values[2] * (1 - low_pass_gain);
@@ -608,9 +616,9 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
 	// apply acceleration limits
 	// apply_acceleratiion_limits(control_vel_x, control_vel_y, control_yawrate, 
 	// 	m_last_cmd_vel, is_emergency_brake, m_robot_direction, dt);
+
 	if(m_robot_direction == -1.0) {
 		if(!is_goal_target){
-			acc_lim_x = m_robot_direction * acc_lim_x;
 			control_vel_x = m_robot_direction * fmin(fabs(control_vel_x), fabs(m_last_cmd_vel.linear.x + acc_lim_x * dt));
 			control_vel_x = m_robot_direction * fmax(fabs(control_vel_x), fabs(m_last_cmd_vel.linear.x - 
 			(is_emergency_brake ?  m_robot_direction * emergency_acc_lim_x : acc_lim_x) * dt));
@@ -627,7 +635,6 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
 	// Calculate vel_yaw
 	control_yawrate = fmin(control_yawrate, m_last_cmd_vel.angular.z + acc_lim_theta * dt);
 	control_yawrate = fmax(control_yawrate, m_last_cmd_vel.angular.z - acc_lim_theta * dt);
-
 
 
 		// constrain velocity after goal reached
