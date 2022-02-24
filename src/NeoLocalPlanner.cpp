@@ -200,7 +200,7 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
 	// get latest global to local transform (map to robot)
 	tf2::Stamped<tf2::Transform> global_to_robot;
 	try {
-		geometry_msgs::msg::TransformStamped msg = tf_->lookupTransform("base_link", m_global_frame, tf2::TimePointZero);
+		geometry_msgs::msg::TransformStamped msg = tf_->lookupTransform(m_base_frame, m_global_frame, tf2::TimePointZero);
 		tf2::fromMsg(msg, global_to_robot);
 	} catch(...) {
 		RCLCPP_WARN_THROTTLE(logger_, *clock_, 1.0, 
