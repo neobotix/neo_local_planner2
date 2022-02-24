@@ -204,7 +204,7 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
 		tf2::fromMsg(msg, global_to_robot);
 	} catch(...) {
 		RCLCPP_WARN_THROTTLE(logger_, *clock_, 1.0, 
-			"lookupTransform(base_link, m_global_frame) failed");
+			"lookupTransform(m_base_frame, m_global_frame) failed");
 	}
 
 	// transform plan to local frame (odom)
