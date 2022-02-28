@@ -824,11 +824,18 @@ void NeoLocalPlanner::configure(const rclcpp_lifecycle::LifecycleNode::WeakPtr &
 	plugin_name_ = name;
 	logger_ = node->get_logger();
 
-	m_base_frame = costmap_ros->getBaseFrameID();
+	std::string robot_namespace(node->get_namespace());
+
+	// removing the unnecessary "/" from the namespace
+	robot_namespace.erase(std::remove(robot_namespace.begin(), robot_namespace.end(), '/'), 
+	robot_namespace.end());
+
+	m_local_frame = robot_namespace + m_local_frame;
+	m_base_frame = robot_namespace + m_base_frame;
 
 	// Creating odometery subscriber and local plan publisher
-	m_odom_sub = node->create_subscription<nav_msgs::msg::Odometry>(odom_topic,  rclcpp::SystemDefaultsQoS(), std::bind(&NeoLocalPlanner::odomCallback,this,std::placeholders::_1));
-	m_local_plan_pub = node->create_publisher<nav_msgs::msg::Path>(local_plan_topic, 1);
+	m_odom_sub = node->create_subscription<nav_msgs::msg::Odometry>(node->get_namespace() + odom_topic,  rclcpp::SystemDefaultsQoS(), std::bind(&NeoLocalPlanner::odomCallback,this,std::placeholders::_1));
+	m_local_plan_pub = node->create_publisher<nav_msgs::msg::Path>(node->get_namespace() + local_plan_topic, 1);
 
 }
 
