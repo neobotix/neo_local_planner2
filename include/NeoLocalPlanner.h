@@ -45,6 +45,8 @@
 #include <vector>
 #include <memory>
 #include <algorithm>
+#include <mutex>
+#include <iostream>
 
 #include "nav2_core/controller.hpp"
 #include "nav2_util/geometry_utils.hpp"
@@ -55,8 +57,6 @@
 #include "nav2_util/odometry_utils.hpp"
 #include "geometry_msgs/msg/pose2_d.hpp"
 #include "geometry_msgs/msg/vector3_stamped.hpp"
-#include <boost/shared_ptr.hpp>
-#include <boost/thread.hpp>
 
 
 namespace neo_local_planner {
@@ -133,6 +133,13 @@ public:
    */
   void setSpeedLimit(const double & speed_limit, const bool & percentage) override;
 
+  /**
+   * @brief Callback executed when a parameter change is detected
+   * @param event ParameterEvent message
+   */
+  rcl_interfaces::msg::SetParametersResult
+  dynamicParametersCallback(std::vector<rclcpp::Parameter> parameters);
+
 	void odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg);
 
 	bool reset_lastvel(nav_msgs::msg::Path m_global_plan, nav_msgs::msg::Path plan);
@@ -148,11 +155,12 @@ private:
 	nav_msgs::msg::Path m_global_plan;
 	rclcpp::Clock::SharedPtr clock_;
 
-
-	boost::mutex m_odometry_mutex;
+	std::mutex m_mutex;
 	nav_msgs::msg::Odometry::SharedPtr m_odometry;
 
 	rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr m_odom_sub;
+  rclcpp_lifecycle::LifecycleNode::WeakPtr node_;
+	rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr dyn_params_handler_;
   std::shared_ptr<rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Path>> m_local_plan_pub;
 
 	std::string m_global_frame = "map";
