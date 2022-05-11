@@ -46,7 +46,6 @@
 #include <memory>
 #include <algorithm>
 #include <mutex>
-#include <iostream>
 
 #include "nav2_core/controller.hpp"
 #include "nav2_util/geometry_utils.hpp"
