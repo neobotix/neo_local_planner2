@@ -45,7 +45,7 @@
 #include <algorithm>
 #include <tf2_eigen/tf2_eigen.hpp>
 
-
+using rcl_interfaces::msg::ParameterType;
 namespace neo_local_planner {
 
 tf2::Quaternion createQuaternionFromYaw(double yaw)
@@ -173,7 +173,8 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
   const geometry_msgs::msg::Twist & speed,
   nav2_core::GoalChecker * goal_checker)
 {
-	boost::mutex::scoped_lock lock(m_odometry_mutex);
+	std::lock_guard<std::mutex> lock_reinit(m_mutex);
+
 	geometry_msgs::msg::Twist cmd_vel;
 	geometry_msgs::msg::TwistStamped cmd_vel_final;
 
@@ -674,11 +675,109 @@ void NeoLocalPlanner::cleanup()
 void NeoLocalPlanner::activate()
 {
 	m_local_plan_pub->on_activate();
+  // Add callback for dynamic parameters
+  auto node = node_.lock();
+  dyn_params_handler_ = node->add_on_set_parameters_callback(
+    std::bind(
+      &NeoLocalPlanner::dynamicParametersCallback,
+      this, std::placeholders::_1));
 }
 
 void NeoLocalPlanner::deactivate()
 {
 	m_local_plan_pub->on_deactivate();
+	dyn_params_handler_.reset();
+}
+
+rcl_interfaces::msg::SetParametersResult
+NeoLocalPlanner::dynamicParametersCallback(
+  std::vector<rclcpp::Parameter> parameters)
+{
+	std::lock_guard<std::mutex> lock_reinit(m_mutex);
+	rcl_interfaces::msg::SetParametersResult result;
+
+  for (auto parameter : parameters) {
+    const auto & param_type = parameter.get_type();
+    const auto & param_name = parameter.get_name();
+
+    if (param_type == ParameterType::PARAMETER_DOUBLE) {
+      if (param_name == "acc_lim_x") {
+        acc_lim_x = parameter.as_double();
+      } else if (param_name == "acc_lim_y") {
+        acc_lim_y = parameter.as_double();
+      } else if (param_name == "acc_lim_theta") {
+        acc_lim_theta = parameter.as_double();
+      } else if (param_name == "min_vel_x") {
+        min_vel_x = parameter.as_double();
+      } else if (param_name == "max_vel_x") {
+        max_vel_x = parameter.as_double();
+      } else if (param_name == "min_vel_y") {
+        min_vel_y = parameter.as_double();
+      } else if (param_name == "max_vel_y") {
+        max_vel_y = parameter.as_double();
+      } else if (param_name == "min_rot_vel") {
+        min_rot_vel = parameter.as_double();
+      } else if (param_name == "max_rot_vel") {
+        max_rot_vel = parameter.as_double();
+      } else if (param_name == "min_vel_trans") {
+        min_vel_trans = parameter.as_double();
+      } else if (param_name == "max_vel_trans") {
+        max_vel_trans = parameter.as_double();
+      } else if (param_name == "rot_stopped_vel") {
+        rot_stopped_vel = parameter.as_double();
+      } else if (param_name == "trans_stopped_vel") {
+        trans_stopped_vel = parameter.as_double();
+      } else if (param_name == "yaw_goal_tolerance") {
+        yaw_goal_tolerance = parameter.as_double();
+      } else if (param_name == "xy_goal_tolerance") {
+        xy_goal_tolerance = parameter.as_double();
+      } else if (param_name == "goal_tune_time") {
+        goal_tune_time = parameter.as_double();
+      } else if (param_name == "lookahead_time") {
+        lookahead_time = parameter.as_double();
+      } else if (param_name == "lookahead_dist") {
+        m_lookahead_dist = parameter.as_double();
+      } else if (param_name == "start_yaw_error") {
+        start_yaw_error = parameter.as_double();
+      } else if (param_name == "pos_x_gain") {
+        pos_x_gain = parameter.as_double();
+      } else if (param_name == "pos_y_gain") {
+        pos_y_gain = parameter.as_double();
+      } else if (param_name == "pos_y_yaw_gain") {
+        pos_y_yaw_gain = parameter.as_double();
+      } else if (param_name == "yaw_gain") {
+        yaw_gain = parameter.as_double();
+      } else if (param_name == "static_yaw_gain") {
+        static_yaw_gain = parameter.as_double();
+      } else if (param_name == "cost_x_gain") {
+        cost_x_gain = parameter.as_double();
+      } else if (param_name == "cost_y_gain") {
+        cost_y_gain = parameter.as_double();
+      } else if (param_name == "cost_y_yaw_gain") {
+        cost_y_yaw_gain = parameter.as_double();
+      } else if (param_name == "cost_y_lookahead_time") {
+        cost_y_lookahead_time = parameter.as_double();
+      } else if (param_name == "cost_yaw_gain") {
+        cost_yaw_gain = parameter.as_double();
+      } else if (param_name == "low_pass_gain") {
+        low_pass_gain = parameter.as_double();
+      } else if (param_name == "max_cost") {
+        max_cost = parameter.as_double();
+      } else if (param_name == "max_curve_vel") {
+        max_curve_vel = parameter.as_double();
+      } else if (param_name == "max_goal_dist") {
+        max_goal_dist = parameter.as_double();
+      } else if (param_name == "max_backup_dist") {
+        max_backup_dist = parameter.as_double();
+      } else if (param_name == "min_stop_dist") {
+        min_stop_dist = parameter.as_double();
+      } else if (param_name == "emergency_acc_lim_x") {
+        emergency_acc_lim_x = parameter.as_double(); 
+      }
+    }
+  }
+  result.successful = true;
+  return result;
 }
 
 bool NeoLocalPlanner::reset_lastvel(nav_msgs::msg::Path m_global_plan, nav_msgs::msg::Path plan)
@@ -710,12 +809,12 @@ void NeoLocalPlanner::setSpeedLimit(
   const double & speed_limit,
   const bool & percentage)
 {
-  
 }
 
 void NeoLocalPlanner::configure(const rclcpp_lifecycle::LifecycleNode::WeakPtr & parent,  std::string name, const std::shared_ptr<tf2_ros::Buffer> & tf,  const std::shared_ptr<nav2_costmap_2d::Costmap2DROS> & costmap_ros)
 {
 	auto node = parent.lock();
+	node_ = parent;
 	plugin_name_ = name;
 	clock_ = node->get_clock();
 	nav2_util::declare_parameter_if_not_declared(node,plugin_name_ + ".acc_lim_x",rclcpp::ParameterValue(0.2));
@@ -841,7 +940,7 @@ void NeoLocalPlanner::configure(const rclcpp_lifecycle::LifecycleNode::WeakPtr &
 
 void NeoLocalPlanner::odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg)
 {
-	boost::mutex::scoped_lock lock(m_odometry_mutex);
+	std::lock_guard<std::mutex> lock_reinit(m_mutex);
 	m_odometry = msg;
 }
 
