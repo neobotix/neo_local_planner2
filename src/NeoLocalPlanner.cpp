@@ -701,77 +701,77 @@ NeoLocalPlanner::dynamicParametersCallback(
     const auto & param_name = parameter.get_name();
 
     if (param_type == ParameterType::PARAMETER_DOUBLE) {
-      if (param_name == "acc_lim_x") {
+      if (param_name == plugin_name_ + ".acc_lim_x") {
         acc_lim_x = parameter.as_double();
-      } else if (param_name == "acc_lim_y") {
+      } else if (param_name == plugin_name_ + ".acc_lim_y") {
         acc_lim_y = parameter.as_double();
-      } else if (param_name == "acc_lim_theta") {
+      } else if (param_name == plugin_name_ + ".acc_lim_theta") {
         acc_lim_theta = parameter.as_double();
-      } else if (param_name == "min_vel_x") {
+      } else if (param_name == plugin_name_ + ".min_vel_x") {
         min_vel_x = parameter.as_double();
-      } else if (param_name == "max_vel_x") {
+      } else if (param_name == plugin_name_ + ".max_vel_x") {
         max_vel_x = parameter.as_double();
-      } else if (param_name == "min_vel_y") {
+      } else if (param_name == plugin_name_ + ".min_vel_y") {
         min_vel_y = parameter.as_double();
-      } else if (param_name == "max_vel_y") {
+      } else if (param_name == plugin_name_ + ".max_vel_y") {
         max_vel_y = parameter.as_double();
-      } else if (param_name == "min_rot_vel") {
+      } else if (param_name == plugin_name_ + ".min_rot_vel") {
         min_rot_vel = parameter.as_double();
-      } else if (param_name == "max_rot_vel") {
+      } else if (param_name == plugin_name_ + ".max_rot_vel") {
         max_rot_vel = parameter.as_double();
-      } else if (param_name == "min_vel_trans") {
+      } else if (param_name == plugin_name_ + ".min_vel_trans") {
         min_vel_trans = parameter.as_double();
-      } else if (param_name == "max_vel_trans") {
+      } else if (param_name == plugin_name_ + ".max_vel_trans") {
         max_vel_trans = parameter.as_double();
-      } else if (param_name == "rot_stopped_vel") {
+      } else if (param_name == plugin_name_ + ".rot_stopped_vel") {
         rot_stopped_vel = parameter.as_double();
-      } else if (param_name == "trans_stopped_vel") {
+      } else if (param_name == plugin_name_ + ".trans_stopped_vel") {
         trans_stopped_vel = parameter.as_double();
-      } else if (param_name == "yaw_goal_tolerance") {
+      } else if (param_name == plugin_name_ + ".yaw_goal_tolerance") {
         yaw_goal_tolerance = parameter.as_double();
-      } else if (param_name == "xy_goal_tolerance") {
+      } else if (param_name == plugin_name_ + ".xy_goal_tolerance") {
         xy_goal_tolerance = parameter.as_double();
-      } else if (param_name == "goal_tune_time") {
+      } else if (param_name == plugin_name_ + ".goal_tune_time") {
         goal_tune_time = parameter.as_double();
-      } else if (param_name == "lookahead_time") {
+      } else if (param_name == plugin_name_ + ".lookahead_time") {
         lookahead_time = parameter.as_double();
-      } else if (param_name == "lookahead_dist") {
+      } else if (param_name == plugin_name_ + ".lookahead_dist") {
         m_lookahead_dist = parameter.as_double();
-      } else if (param_name == "start_yaw_error") {
+      } else if (param_name == plugin_name_ + ".start_yaw_error") {
         start_yaw_error = parameter.as_double();
-      } else if (param_name == "pos_x_gain") {
+      } else if (param_name == plugin_name_ + ".pos_x_gain") {
         pos_x_gain = parameter.as_double();
-      } else if (param_name == "pos_y_gain") {
+      } else if (param_name == plugin_name_ + ".pos_y_gain") {
         pos_y_gain = parameter.as_double();
-      } else if (param_name == "pos_y_yaw_gain") {
+      } else if (param_name == plugin_name_ + ".pos_y_yaw_gain") {
         pos_y_yaw_gain = parameter.as_double();
-      } else if (param_name == "yaw_gain") {
+      } else if (param_name == plugin_name_ + ".yaw_gain") {
         yaw_gain = parameter.as_double();
-      } else if (param_name == "static_yaw_gain") {
+      } else if (param_name == plugin_name_ + ".static_yaw_gain") {
         static_yaw_gain = parameter.as_double();
-      } else if (param_name == "cost_x_gain") {
+      } else if (param_name == plugin_name_ + ".cost_x_gain") {
         cost_x_gain = parameter.as_double();
-      } else if (param_name == "cost_y_gain") {
+      } else if (param_name == plugin_name_ + ".cost_y_gain") {
         cost_y_gain = parameter.as_double();
-      } else if (param_name == "cost_y_yaw_gain") {
+      } else if (param_name == plugin_name_ + ".cost_y_yaw_gain") {
         cost_y_yaw_gain = parameter.as_double();
-      } else if (param_name == "cost_y_lookahead_time") {
+      } else if (param_name == plugin_name_ + ".cost_y_lookahead_time") {
         cost_y_lookahead_time = parameter.as_double();
-      } else if (param_name == "cost_yaw_gain") {
+      } else if (param_name == plugin_name_ + ".cost_yaw_gain") {
         cost_yaw_gain = parameter.as_double();
-      } else if (param_name == "low_pass_gain") {
+      } else if (param_name == plugin_name_ + ".low_pass_gain") {
         low_pass_gain = parameter.as_double();
-      } else if (param_name == "max_cost") {
+      } else if (param_name == plugin_name_ + ".max_cost") {
         max_cost = parameter.as_double();
-      } else if (param_name == "max_curve_vel") {
+      } else if (param_name == plugin_name_ + ".max_curve_vel") {
         max_curve_vel = parameter.as_double();
-      } else if (param_name == "max_goal_dist") {
+      } else if (param_name == plugin_name_ + ".max_goal_dist") {
         max_goal_dist = parameter.as_double();
-      } else if (param_name == "max_backup_dist") {
+      } else if (param_name == plugin_name_ + ".max_backup_dist") {
         max_backup_dist = parameter.as_double();
-      } else if (param_name == "min_stop_dist") {
+      } else if (param_name == plugin_name_ + ".min_stop_dist") {
         min_stop_dist = parameter.as_double();
-      } else if (param_name == "emergency_acc_lim_x") {
+      } else if (param_name == plugin_name_ + ".emergency_acc_lim_x") {
         emergency_acc_lim_x = parameter.as_double(); 
       }
     }
