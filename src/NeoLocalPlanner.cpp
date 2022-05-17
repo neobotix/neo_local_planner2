@@ -716,15 +716,15 @@ NeoLocalPlanner::dynamicParametersCallback(
       } else if (param_name == plugin_name_ + ".max_vel_y") {
         max_vel_y = parameter.as_double();
       } else if (param_name == plugin_name_ + ".min_rot_vel") {
-        min_rot_vel = parameter.as_double();
+        min_vel_theta = parameter.as_double();
       } else if (param_name == plugin_name_ + ".max_rot_vel") {
-        max_rot_vel = parameter.as_double();
+        max_vel_theta = parameter.as_double();
       } else if (param_name == plugin_name_ + ".min_vel_trans") {
         min_vel_trans = parameter.as_double();
       } else if (param_name == plugin_name_ + ".max_vel_trans") {
         max_vel_trans = parameter.as_double();
       } else if (param_name == plugin_name_ + ".rot_stopped_vel") {
-        rot_stopped_vel = parameter.as_double();
+        theta_stopped_vel = parameter.as_double();
       } else if (param_name == plugin_name_ + ".trans_stopped_vel") {
         trans_stopped_vel = parameter.as_double();
       } else if (param_name == plugin_name_ + ".yaw_goal_tolerance") {
