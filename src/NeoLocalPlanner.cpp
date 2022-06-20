@@ -811,7 +811,7 @@ void NeoLocalPlanner::setSpeedLimit(
 {
 }
 
-void NeoLocalPlanner::configure(const rclcpp_lifecycle::LifecycleNode::WeakPtr & parent,  std::string name, const std::shared_ptr<tf2_ros::Buffer> & tf,  const std::shared_ptr<nav2_costmap_2d::Costmap2DROS> & costmap_ros)
+void NeoLocalPlanner::configure(const rclcpp_lifecycle::LifecycleNode::WeakPtr & parent,  std::string name, const std::shared_ptr<tf2_ros::Buffer> tf,  const std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros)
 {
 	auto node = parent.lock();
 	node_ = parent;
