@@ -47,6 +47,7 @@
 #include "nav2_core/controller.hpp"
 #include "nav2_util/geometry_utils.hpp"
 #include "nav2_util/lifecycle_node.hpp"
+#include "nav2_costmap_2d/footprint_collision_checker.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "pluginlib/class_loader.hpp"
 #include "pluginlib/class_list_macros.hpp"
@@ -155,11 +156,15 @@ private:
 
   std::mutex m_mutex;
   nav_msgs::msg::Odometry::SharedPtr m_odometry;
+  geometry_msgs::msg::PointStamped m_carrot_pose;
 
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr m_odom_sub;
+  rclcpp::Publisher<geometry_msgs::msg::PointStamped>::SharedPtr m_lookahead_point_pub;
   rclcpp_lifecycle::LifecycleNode::WeakPtr node_;
   rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr dyn_params_handler_;
   std::shared_ptr<rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Path>> m_local_plan_pub;
+  std::unique_ptr<nav2_costmap_2d::FootprintCollisionChecker<nav2_costmap_2d::Costmap2D *>>
+  collision_checker_;
 
   std::string m_global_frame = "map";
   std::string m_local_frame;
@@ -184,6 +189,7 @@ private:
   uint64_t m_update_counter = 0;
   double m_last_control_values[3] = {};
   geometry_msgs::msg::Twist m_last_cmd_vel;
+  tf2::Duration transform_tolerance_;
 
 protected:
   double acc_lim_x = 0;
