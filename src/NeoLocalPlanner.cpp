@@ -656,6 +656,14 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
   control_yawrate = fmin(control_yawrate, m_last_cmd_vel.angular.z + acc_lim_theta * dt);
   control_yawrate = fmax(control_yawrate, m_last_cmd_vel.angular.z - acc_lim_theta * dt);
 
+  // Avoiding arc trajectories and keeping the robot inside the global plan
+  if (abs(yaw_error) > M_PI / 6 && !is_goal_target) {
+    control_vel_x = 0;
+    control_vel_y = 0;
+    RCLCPP_INFO_THROTTLE(
+      logger_, *clock_, 2000.0, "Changing the course of navigation");
+  }
+
   // fill return data
   if (m_robot_direction == -1.0) {
     cmd_vel.linear.x = fmax(
