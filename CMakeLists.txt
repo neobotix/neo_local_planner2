@@ -18,26 +18,24 @@ include_directories(
   include
 )
 
-set(dependencies
-  rclcpp
-  geometry_msgs
-  nav2_costmap_2d
-  pluginlib
-  nav2_util
-  nav2_core
-  tf2_ros
-  tf2_sensor_msgs
-  tf2_geometry_msgs
-  tf2_eigen
-)
-
 set(library_name neo_local_planner2)
 
 add_library(${library_name} SHARED
         src/NeoLocalPlanner.cpp)
 
-ament_target_dependencies(${library_name}
-  ${dependencies}
+target_link_libraries(${library_name} PUBLIC
+  rclcpp::rclcpp
+  angles::angles
+  ${geometry_msgs_TARGETS}
+  ${nav_msgs_TARGETS}
+  nav2_costmap_2d::nav2_costmap_2d_client
+  nav2_costmap_2d::nav2_costmap_2d_core
+  pluginlib::pluginlib
+  nav2_core::nav2_core
+  tf2_ros::tf2_ros
+  tf2_sensor_msgs::tf2_sensor_msgs
+  tf2_geometry_msgs::tf2_geometry_msgs
+  tf2_eigen::tf2_eigen
 )
 
 install(DIRECTORY include/

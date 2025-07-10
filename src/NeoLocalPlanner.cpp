@@ -35,7 +35,7 @@
 #include <tf2/utils.h>
 
 #include "../include/NeoLocalPlanner.hpp"
-#include "nav2_util/node_utils.hpp"
+#include "nav2_ros_common/node_utils.hpp"
 #include "nav2_util/line_iterator.hpp"
 #include "nav2_core/goal_checker.hpp"
 #include "nav2_core/controller_exceptions.hpp"
@@ -540,7 +540,7 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
 
   if (footprint_cost == nav2_costmap_2d::LETHAL_OBSTACLE) {
     RCLCPP_WARN_THROTTLE(
-      logger_, *clock_, 1.0,
+      logger_, *clock_, 1000.0,
       "Obstacle ahead - going to recovery behaviour");
     throw nav2_core::NoValidControl("Detected collision ahead!");
   }
@@ -762,14 +762,6 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
   control_yawrate = fmin(control_yawrate, m_last_cmd_vel.angular.z + acc_lim_theta * dt);
   control_yawrate = fmax(control_yawrate, m_last_cmd_vel.angular.z - acc_lim_theta * dt);
 
-  // Avoiding arc trajectories and keeping the robot inside the global plan
-  if (abs(yaw_error) > M_PI / 6 && !is_goal_target) {
-    control_vel_x = 0;
-    control_vel_y = 0;
-    RCLCPP_INFO_THROTTLE(
-      logger_, *clock_, 2000.0, "Changing the course of navigation");
-  }
-
   // fill return data
   if (m_robot_direction == -1.0) {
     cmd_vel.linear.x = fmax(
@@ -945,7 +937,7 @@ void NeoLocalPlanner::setSpeedLimit(
 }
 
 void NeoLocalPlanner::configure(
-  const rclcpp_lifecycle::LifecycleNode::WeakPtr & parent,
+  const nav2::LifecycleNode::WeakPtr & parent,
   std::string name, const std::shared_ptr<tf2_ros::Buffer> tf,
   const std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros)
 {
@@ -953,134 +945,134 @@ void NeoLocalPlanner::configure(
   node_ = parent;
   plugin_name_ = name;
   clock_ = node->get_clock();
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".acc_lim_x", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".acc_lim_y", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".acc_lim_theta", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".min_vel_x", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".max_vel_x", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".min_vel_y", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".max_vel_y", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".min_rot_vel", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".max_rot_vel", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".min_vel_trans", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".max_vel_trans", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".rot_stopped_vel", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".trans_stopped_vel", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".yaw_goal_tolerance", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".xy_goal_tolerance", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".goal_tune_time", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".lookahead_time", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".lookahead_dist", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".start_yaw_error", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".pos_x_gain", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".pos_y_gain", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".pos_y_yaw_gain", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".yaw_gain", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".static_yaw_gain", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".cost_x_gain", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".cost_y_gain", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".cost_y_yaw_gain", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".cost_y_lookahead_dist", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".cost_y_lookahead_time", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".cost_yaw_gain", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".low_pass_gain", rclcpp::ParameterValue(
       0.2));
 
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".max_cost", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".max_curve_vel", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".max_goal_dist", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".max_backup_dist", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".min_stop_dist", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".emergency_acc_lim_x", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".differential_drive", rclcpp::ParameterValue(
       true));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".allow_reversing", rclcpp::ParameterValue(
       false));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".odom_topic", rclcpp::ParameterValue(
       "/odom"));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".local_plan_topic", rclcpp::ParameterValue(
       "/local_plan"));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".local_frame", rclcpp::ParameterValue(
       "odom"));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".base_frame", rclcpp::ParameterValue(
       "base_link"));
 
@@ -1160,12 +1152,12 @@ void NeoLocalPlanner::configure(
   // Creating odometery subscriber and local plan publisher
   m_odom_sub = node->create_subscription<nav_msgs::msg::Odometry>(
     odom_topic,
-    rclcpp::SystemDefaultsQoS(),
-    std::bind(&NeoLocalPlanner::odomCallback, this, std::placeholders::_1));
+    std::bind(&NeoLocalPlanner::odomCallback, this, std::placeholders::_1),
+    rclcpp::SystemDefaultsQoS());
   m_local_plan_pub = node->create_publisher<nav_msgs::msg::Path>(local_plan_topic, 1);
 
   m_lookahead_point_pub = node->create_publisher<geometry_msgs::msg::PointStamped>(
-    "goal_pose",
+    "lookahead_pose",
     1
   );
 }
