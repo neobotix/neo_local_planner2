@@ -32,7 +32,7 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  *********************************************************************/
 
-#include <tf2/utils.h>
+#include <tf2/utils.hpp>
 
 #include "../include/NeoLocalPlanner.hpp"
 #include "nav2_ros_common/node_utils.hpp"
