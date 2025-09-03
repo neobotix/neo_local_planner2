@@ -46,8 +46,8 @@
 
 #include "nav2_core/controller.hpp"
 #include "nav2_util/geometry_utils.hpp"
-#include "nav2_ros_common/lifecycle_node.hpp"
-#include "nav2_ros_common/service_client.hpp"
+#include "nav2_util/lifecycle_node.hpp"
+#include "nav2_util/service_client.hpp"
 #include "nav2_costmap_2d/footprint_collision_checker.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "pluginlib/class_loader.hpp"
@@ -81,7 +81,7 @@ public:
    * @param costmap_ros Costmap2DROS object of environment
    */
   void configure(
-    const nav2::LifecycleNode::WeakPtr & parent,
+    const rclcpp_lifecycle::LifecycleNode::WeakPtr & parent,
     std::string name, const std::shared_ptr<tf2_ros::Buffer> tf,
     const std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros) override;
 
@@ -158,8 +158,8 @@ private:
   nav_msgs::msg::Odometry::SharedPtr m_odometry;
   geometry_msgs::msg::PointStamped m_carrot_pose;
 
-  nav2::Subscription<nav_msgs::msg::Odometry>::SharedPtr m_odom_sub;
-  nav2::Publisher<geometry_msgs::msg::PointStamped>::SharedPtr m_lookahead_point_pub;
+  rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr m_odom_sub;
+  rclcpp::Publisher<geometry_msgs::msg::PointStamped>::SharedPtr m_lookahead_point_pub;
   rclcpp_lifecycle::LifecycleNode::WeakPtr node_;
   rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr dyn_params_handler_;
   std::shared_ptr<rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Path>> m_local_plan_pub;
