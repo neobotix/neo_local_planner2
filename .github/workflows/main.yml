@@ -32,7 +32,7 @@ jobs:
           use-ros2-testing: false
       - uses: ros-tooling/action-ros-ci@0.4.5
         with:
-          target-ros2-distro: jazzy
+          target-ros2-distro: kilted
           package-name: neo_local_planner2
           skip-tests: true
           colcon-defaults: |
@@ -55,7 +55,7 @@ jobs:
     - uses: actions/checkout@v2
     - uses: ros-tooling/setup-ros@0.7.15
       with:
-        target-ros2-distro: jazzy
+        target-ros2-distro: kilted
     - uses: ros-tooling/action-ros-lint@0.1.4
       with:
         linter: ${{ matrix.linter }}
