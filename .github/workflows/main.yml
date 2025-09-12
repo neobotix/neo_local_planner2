@@ -32,7 +32,7 @@ jobs:
           use-ros2-testing: false
       - uses: ros-tooling/action-ros-ci@0.4.5
         with:
-          required-ros-distributions: jazzy
+          target-ros2-distro: jazzy
           package-name: neo_local_planner2
           skip-tests: true
           colcon-defaults: |
