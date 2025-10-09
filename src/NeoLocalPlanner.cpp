@@ -610,7 +610,8 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
       const double max_vel_x = stop_accel * stop_time;
 
       // check if it's much lower than current velocity
-      if (fabs(max_vel_x) < 0.5 * fabs(start_vel_x)) {
+      if (fabs(max_vel_x) < 0.5 * fabs(start_vel_x) ||
+        fabs(speed.linear.x == 0.0 || speed.linear.y == 0.0 || speed.angular.z == 0.0)) {
         is_emergency_brake = true;
       }
 
@@ -732,6 +733,15 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
 
   // logic check
   is_emergency_brake = is_emergency_brake && fabs(control_vel_x) >= 0;
+
+
+  // On scanner stop the robot goes to zero velocity, this means the robot has to accelerate from 0
+  // Rather than accelerating from the last known velocity
+  if (is_emergency_brake) {
+    control_vel_x = 0.0;
+    control_vel_y = 0.0;
+    control_yawrate = 0.0;
+  }
 
   // apply low pass filter
   control_vel_x = control_vel_x * low_pass_gain + m_last_control_values[0] * (1 - low_pass_gain);
