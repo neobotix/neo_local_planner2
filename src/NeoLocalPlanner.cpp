@@ -356,17 +356,17 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
       obstacle_cost = fmax(obstacle_cost, cost);
 
       {
-        geometry_msgs::msg::PoseStamped tmp;
-        auto tmp1 = tf2::toMsg(pose);
-        tmp.header = position.header;
-        tmp.pose.position.x = tmp1.translation.x;
-        tmp.pose.position.y = tmp1.translation.y;
-        tmp.pose.position.z = tmp1.translation.z;
-        tmp.pose.orientation.x = tmp1.rotation.x;
-        tmp.pose.orientation.y = tmp1.rotation.y;
-        tmp.pose.orientation.z = tmp1.rotation.z;
-        tmp.pose.orientation.w = tmp1.rotation.w;
-        local_path.poses.push_back(tmp);
+        geometry_msgs::msg::PoseStamped local_path_pose;
+        auto pose_msg = tf2::toMsg(pose);
+        local_path_pose.header = position.header;
+        local_path_pose.pose.position.x = pose_msg.translation.x;
+        local_path_pose.pose.position.y = pose_msg.translation.y;
+        local_path_pose.pose.position.z = pose_msg.translation.z;
+        local_path_pose.pose.orientation.x = pose_msg.rotation.x;
+        local_path_pose.pose.orientation.y = pose_msg.rotation.y;
+        local_path_pose.pose.orientation.z = pose_msg.rotation.z;
+        local_path_pose.pose.orientation.w = pose_msg.rotation.w;
+        local_path.poses.push_back(local_path_pose);
       }
       if (!is_contained || have_obstacle) {
         break;
@@ -627,34 +627,34 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
 
   // apply low pass filter
 
-  control_vel_x = control_vel_x * low_pass_gain + m_last_control_values[0] * (1 - low_pass_gain);
-  control_vel_y = control_vel_y * low_pass_gain + m_last_control_values[1] * (1 - low_pass_gain);
-  control_yawrate = control_yawrate * low_pass_gain + m_last_control_values[2] *
+  control_vel_x = control_vel_x * low_pass_gain + start_vel_x * (1 - low_pass_gain);
+  control_vel_y = control_vel_y * low_pass_gain + start_vel_y * (1 - low_pass_gain);
+  control_yawrate = control_yawrate * low_pass_gain + start_yawrate *
     (1 - low_pass_gain);
 
   // apply acceleration limits
 
   if (m_robot_direction == -1.0) {
     if (!is_goal_target) {
-      control_vel_x = fmin(fabs(control_vel_x), fabs(m_last_cmd_vel.linear.x + acc_lim_x * dt));
+      control_vel_x = fmin(fabs(control_vel_x), fabs(start_vel_x + acc_lim_x * dt));
       control_vel_x = m_robot_direction * fmax(
         fabs(control_vel_x), fabs(
-          m_last_cmd_vel.linear.x -
+          start_vel_x -
           (is_emergency_brake ? m_robot_direction * emergency_acc_lim_x : acc_lim_x) * dt));
     }
   } else {
     control_vel_x = fmax(
-      fmin(control_vel_x, m_last_cmd_vel.linear.x + acc_lim_x * dt),
-      m_last_cmd_vel.linear.x - (is_emergency_brake ? emergency_acc_lim_x : acc_lim_x) * dt);
+      fmin(control_vel_x, start_vel_x + acc_lim_x * dt),
+      start_vel_x - (is_emergency_brake ? emergency_acc_lim_x : acc_lim_x) * dt);
   }
 
   // Calculate vel_y
-  control_vel_y = fmin(control_vel_y, m_last_cmd_vel.linear.y + acc_lim_y * dt);
-  control_vel_y = fmax(control_vel_y, m_last_cmd_vel.linear.y - acc_lim_y * dt);
+  control_vel_y = fmin(control_vel_y, start_vel_y + acc_lim_y * dt);
+  control_vel_y = fmax(control_vel_y, start_vel_y - acc_lim_y * dt);
 
   // Calculate vel_yaw
-  control_yawrate = fmin(control_yawrate, m_last_cmd_vel.angular.z + acc_lim_theta * dt);
-  control_yawrate = fmax(control_yawrate, m_last_cmd_vel.angular.z - acc_lim_theta * dt);
+  control_yawrate = fmin(control_yawrate, start_yawrate + acc_lim_theta * dt);
+  control_yawrate = fmax(control_yawrate, start_yawrate - acc_lim_theta * dt);
 
   // fill return data
   if (m_robot_direction == -1.0) {
