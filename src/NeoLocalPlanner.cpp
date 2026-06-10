@@ -266,6 +266,13 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
   double lookahead_dist = 0.0;
   double cost_y_lookahead_dist = 0.0;
 
+  // reset last cmd vel if robot is not moving - avoids instant acceleration after EMStop
+  if (start_vel_x == 0.0 && start_vel_y == 0.0 && start_yawrate == 0.0) {
+    m_last_cmd_vel.linear.x = 0;
+    m_last_cmd_vel.linear.y = 0;
+    m_last_cmd_vel.angular.z = 0;
+  }
+
   // calc dynamic lookahead distances
   lookahead_dist = m_lookahead_dist + fmax(fabs(start_vel_x), 0) * lookahead_time;
   cost_y_lookahead_dist = m_cost_y_lookahead_dist + fmax(start_vel_x, 0) * cost_y_lookahead_time;
