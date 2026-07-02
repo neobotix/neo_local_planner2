@@ -290,6 +290,13 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
   double lookahead_dist = 0.0;
   double cost_y_lookahead_dist = 0.0;
 
+  // reset last cmd vel if robot is not moving - avoids instant acceleration after EMStop
+  if (start_vel_x == 0.0 && start_vel_y == 0.0 && start_yawrate == 0.0) {
+    m_last_cmd_vel.linear.x = 0;
+    m_last_cmd_vel.linear.y = 0;
+    m_last_cmd_vel.angular.z = 0;
+  }
+
   // calc dynamic lookahead distances
   lookahead_dist = m_lookahead_dist + fmax(fabs(start_vel_x), 0) * lookahead_time;
   cost_y_lookahead_dist = m_cost_y_lookahead_dist + fmax(start_vel_x, 0) * cost_y_lookahead_time;
@@ -409,17 +416,43 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
 
   // compute obstacle distance and orientation
   bool have_obstacle = false;
+  bool have_collision = false;
   double obstacle_dist = 0.0;
   double obstacle_cost = 0.0;
   double yaw_projection = 0.0;
   {
     double delta_move = 0.0;
     const double delta_time = 0.01;
+    const double translational_speed = std::hypot(start_vel_x, start_vel_y);
+
+    // Only collisions inside the distance needed to react and stop are immediately unsafe.
+    // More distant collisions are treated as obstacles so that the next control cycle can
+    // produce a different trajectory instead of rejecting the current command outright.
+    double collision_deceleration = fabs(emergency_acc_lim_x);
+    if (!differential_drive && fabs(start_vel_y) > trans_stopped_vel) {
+      const double lateral_deceleration = fabs(acc_lim_y);
+      collision_deceleration = collision_deceleration > 0.0 ?
+        fmin(collision_deceleration, lateral_deceleration) : lateral_deceleration;
+    }
+    const double stopping_distance = collision_deceleration > 0.0 ?
+      translational_speed * translational_speed / (2.0 * collision_deceleration) :
+      lookahead_dist;
+    const double collision_stop_distance =
+      translational_speed * delta_time + stopping_distance + min_stop_dist;
 
     tf2::Transform pose;
     tf2::fromMsg(position.pose, pose);
     tf2::Transform last_pose = pose;
     bool in_max_lookahead_dist = false;
+    const auto & footprint = costmap_ros_->getRobotFootprint();
+
+    const auto pose_is_in_collision = [this, &footprint](const tf2::Transform & test_pose) {
+        return collision_checker_->footprintCostAtPose(
+          test_pose.getOrigin().x(),
+          test_pose.getOrigin().y(),
+          tf2::getYaw(test_pose.getRotation()),
+          footprint) == nav2_costmap_2d::LETHAL_OBSTACLE;
+      };
 
     while (!in_max_lookahead_dist) {
       const double cost = compute_max_line_cost(costmap_, last_pose.getOrigin(), pose.getOrigin());
@@ -433,6 +466,13 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
       }
       have_obstacle = cost >= max_cost;
       obstacle_cost = fmax(obstacle_cost, cost);
+      if (pose_is_in_collision(pose)) {
+        if (obstacle_dist <= collision_stop_distance) {
+          have_collision = true;
+        } else {
+          have_obstacle = true;
+        }
+      }
 
       {
         geometry_msgs::msg::PoseStamped tmp;
@@ -453,7 +493,7 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
       double yaw_last = createYawFromQuat(local_path.poses.back().pose.orientation);
 
       // Cropping the local plan to the specified lookahead distance
-      if (obstacle_dist >= lookahead_dist * speed.linear.x ||
+      if (obstacle_dist >= lookahead_dist ||
         obstacle_dist >= dist_goal ||
         m_state == state_t::STATE_ROTATING ||
         fabs(angles::shortest_angular_distance(yaw_first, yaw_last)) > M_PI / 6)
@@ -468,7 +508,7 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
         }
       }
 
-      if (!is_contained || have_obstacle) {
+      if (!is_contained || have_obstacle || have_collision) {
         break;
       }
 
@@ -488,7 +528,18 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
           tmp.pose.position = position.pose.position;
           tmp.pose.orientation = quat_msg;
           local_path.poses.push_back(tmp);
+
+          tf2::Transform rotation_pose;
+          tf2::fromMsg(tmp.pose, rotation_pose);
+          if (pose_is_in_collision(rotation_pose)) {
+            have_collision = true;
+            break;
+          }
         }
+      }
+
+      if (have_collision) {
+        break;
       }
 
       last_pose = pose;
@@ -531,14 +582,8 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
 
   obstacle_dist -= min_stop_dist;
 
-  // Check if the the robot footprint is in obstacle
-  double footprint_cost = collision_checker_->footprintCostAtPose(
-    local_path.poses.back().pose.position.x,
-    local_path.poses.back().pose.position.y,
-    tf2::getYaw(local_path.poses.back().pose.orientation),
-    costmap_ros_->getRobotFootprint());
-
-  if (footprint_cost == nav2_costmap_2d::LETHAL_OBSTACLE) {
+  // Reject only collisions that lie inside the current stopping envelope.
+  if (have_collision) {
     RCLCPP_WARN_THROTTLE(
       logger_, *clock_, 1000.0,
       "Obstacle ahead - going to recovery behaviour");
