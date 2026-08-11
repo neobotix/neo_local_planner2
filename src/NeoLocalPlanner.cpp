@@ -780,7 +780,10 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
   // apply low pass filter
 
   control_vel_x = control_vel_x * low_pass_gain + m_last_control_values[0] * (1 - low_pass_gain);
-  control_vel_y = control_vel_y * low_pass_gain + m_last_control_values[1] * (1 - low_pass_gain);
+  if (!differential_drive) {
+    control_vel_y = control_vel_y * low_pass_gain +
+      m_last_control_values[1] * (1 - low_pass_gain);
+  }
   control_yawrate = control_yawrate * low_pass_gain + m_last_control_values[2] *
     (1 - low_pass_gain);
 
@@ -800,9 +803,13 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
       m_last_cmd_vel.linear.x - (is_emergency_brake ? emergency_acc_lim_x : acc_lim_x) * dt);
   }
 
-  // Calculate vel_y
-  control_vel_y = fmin(control_vel_y, m_last_cmd_vel.linear.y + acc_lim_y * dt);
-  control_vel_y = fmax(control_vel_y, m_last_cmd_vel.linear.y - acc_lim_y * dt);
+  // Differential-drive robots cannot command lateral velocity.
+  if (differential_drive) {
+    control_vel_y = 0.0;
+  } else {
+    control_vel_y = fmin(control_vel_y, m_last_cmd_vel.linear.y + acc_lim_y * dt);
+    control_vel_y = fmax(control_vel_y, m_last_cmd_vel.linear.y - acc_lim_y * dt);
+  }
 
   // Calculate vel_yaw
   control_yawrate = fmin(control_yawrate, m_last_cmd_vel.angular.z + acc_lim_theta * dt);
@@ -819,7 +826,8 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
       max_vel_x);
   }
 
-  cmd_vel.linear.y = fmin(fmax(control_vel_y, min_vel_y), max_vel_y);
+  cmd_vel.linear.y = differential_drive ? 0.0 :
+    fmin(fmax(control_vel_y, min_vel_y), max_vel_y);
   cmd_vel.linear.z = 0;
   cmd_vel.angular.x = 0;
   cmd_vel.angular.y = 0;
