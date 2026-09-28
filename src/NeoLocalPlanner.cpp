@@ -115,6 +115,46 @@ std::vector<tf2::Transform>::const_iterator move_along_path(
   return iter;
 }
 
+double estimate_path_curvature(
+  std::vector<tf2::Transform>::const_iterator begin,
+  std::vector<tf2::Transform>::const_iterator end,
+  const double max_dist)
+{
+  if (begin == end || max_dist <= 0.0) {
+    return 0.0;
+  }
+
+  auto iter_prev = begin;
+  auto iter = begin + 1;
+  double path_dist = 0.0;
+  double total_heading_change = 0.0;
+  double previous_heading = 0.0;
+  bool have_heading = false;
+
+  while (iter != end && path_dist < max_dist) {
+    const tf2::Vector3 segment = iter->getOrigin() - iter_prev->getOrigin();
+    const double segment_length = segment.length();
+
+    if (segment_length > std::numeric_limits<double>::epsilon()) {
+      const double heading = std::atan2(segment.y(), segment.x());
+      if (have_heading) {
+        total_heading_change += std::fabs(
+          angles::shortest_angular_distance(previous_heading, heading));
+      }
+      previous_heading = heading;
+      have_heading = true;
+      path_dist += segment_length;
+    }
+
+    iter_prev = iter;
+    ++iter;
+  }
+
+  const double measured_dist = fmin(path_dist, max_dist);
+  return measured_dist > std::numeric_limits<double>::epsilon() ?
+         total_heading_change / measured_dist : 0.0;
+}
+
 std::vector<std::pair<int, int>> get_line_cells(
   nav2_costmap_2d::Costmap2D * cost_map,
   const tf2::Vector3 & world_pos_0,
@@ -296,7 +336,8 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
     m_last_cmd_vel.angular.z = 0;
   }
 
-  // calc dynamic lookahead distances
+  // Calculate the speed-based lookahead. It is shortened based on path curvature
+  // after the closest path point has been found below.
   lookahead_dist = m_lookahead_dist + fmax(fabs(start_vel_x), 0) * lookahead_time;
   cost_y_lookahead_dist = m_cost_y_lookahead_dist + fmax(start_vel_x, 0) * cost_y_lookahead_time;
 
@@ -370,6 +411,17 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
 
   // find closest point on path to future position
   auto iter_target = find_closest_point(local_plan.cbegin(), local_plan.cend(), actual_pos);
+
+  // A speed-only lookahead can cut across tight curves. Reduce it as the path
+  // curvature increases, while retaining a longer preview on straight sections.
+  const double path_curvature = estimate_path_curvature(
+    iter_target, local_plan.cend(), lookahead_dist);
+  const double curvature_scale =
+    1.0 + fmax(curvature_lookahead_gain, 0.0) * path_curvature;
+  lookahead_dist = fmax(min_lookahead_dist, lookahead_dist / curvature_scale);
+  if (max_lookahead_dist > 0.0) {
+    lookahead_dist = fmin(lookahead_dist, max_lookahead_dist);
+  }
 
   // check if goal target
   bool is_goal_target = false;
@@ -919,6 +971,12 @@ NeoLocalPlanner::dynamicParametersCallback(
         lookahead_time = parameter.as_double();
       } else if (param_name == plugin_name_ + ".lookahead_dist") {
         m_lookahead_dist = parameter.as_double();
+      } else if (param_name == plugin_name_ + ".min_lookahead_dist") {
+        min_lookahead_dist = parameter.as_double();
+      } else if (param_name == plugin_name_ + ".max_lookahead_dist") {
+        max_lookahead_dist = parameter.as_double();
+      } else if (param_name == plugin_name_ + ".curvature_lookahead_gain") {
+        curvature_lookahead_gain = parameter.as_double();
       } else if (param_name == plugin_name_ + ".start_yaw_error") {
         start_yaw_error = parameter.as_double();
       } else if (param_name == plugin_name_ + ".pos_x_gain") {
@@ -1054,6 +1112,15 @@ void NeoLocalPlanner::configure(
     node, plugin_name_ + ".lookahead_dist", rclcpp::ParameterValue(
       0.2));
   nav2_util::declare_parameter_if_not_declared(
+    node, plugin_name_ + ".min_lookahead_dist", rclcpp::ParameterValue(
+      0.25));
+  nav2_util::declare_parameter_if_not_declared(
+    node, plugin_name_ + ".max_lookahead_dist", rclcpp::ParameterValue(
+      1.5));
+  nav2_util::declare_parameter_if_not_declared(
+    node, plugin_name_ + ".curvature_lookahead_gain", rclcpp::ParameterValue(
+      1.0));
+  nav2_util::declare_parameter_if_not_declared(
     node, plugin_name_ + ".start_yaw_error", rclcpp::ParameterValue(
       0.2));
   nav2_util::declare_parameter_if_not_declared(
@@ -1149,6 +1216,10 @@ void NeoLocalPlanner::configure(
   node->get_parameter_or(plugin_name_ + ".goal_tune_time", goal_tune_time, 0.5);
   node->get_parameter_or(plugin_name_ + ".lookahead_time", lookahead_time, 0.5);
   node->get_parameter_or(plugin_name_ + ".lookahead_dist", m_lookahead_dist, 0.5);
+  node->get_parameter_or(plugin_name_ + ".min_lookahead_dist", min_lookahead_dist, 0.25);
+  node->get_parameter_or(plugin_name_ + ".max_lookahead_dist", max_lookahead_dist, 1.5);
+  node->get_parameter_or(
+    plugin_name_ + ".curvature_lookahead_gain", curvature_lookahead_gain, 1.0);
   node->get_parameter_or(plugin_name_ + ".start_yaw_error", start_yaw_error, 0.2);
   node->get_parameter_or(plugin_name_ + ".pos_x_gain", pos_x_gain, 1.0);
   node->get_parameter_or(plugin_name_ + ".pos_y_gain", pos_y_gain, 1.0);

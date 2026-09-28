@@ -219,6 +219,9 @@ protected:
   double start_yaw_error = 0.0;
   double lookahead_time = 0.0;
   double m_lookahead_dist = 0.0;
+  double min_lookahead_dist = 0.0;
+  double max_lookahead_dist = 0.0;
+  double curvature_lookahead_gain = 0.0;
   double pos_x_gain = 0.0;
   double pos_y_gain = 0.0;
   double pos_y_yaw_gain = 0.0;
