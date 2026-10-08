@@ -32,12 +32,13 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  *********************************************************************/
 
-#include <tf2/utils.h>
+#include <tf2/utils.hpp>
 
-#include "../include/NeoLocalPlanner.hpp"
-#include "nav2_util/node_utils.hpp"
+#include "NeoLocalPlanner.hpp"
+#include "nav2_ros_common/node_utils.hpp"
 #include "nav2_util/line_iterator.hpp"
 #include "nav2_core/goal_checker.hpp"
+#include "nav2_core/controller_exceptions.hpp"
 #include "pluginlib/class_list_macros.hpp"
 #include <tf2_eigen/tf2_eigen.hpp>
 #include <tf2_sensor_msgs/tf2_sensor_msgs.hpp>
@@ -179,64 +180,58 @@ double compute_max_line_cost(
 geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
   const geometry_msgs::msg::PoseStamped & position,
   const geometry_msgs::msg::Twist & speed,
-  nav2_core::GoalChecker * goal_checker)
+  nav2_core::GoalChecker * /* goal_checker */,
+  const nav_msgs::msg::Path & transformed_global_plan,
+  const geometry_msgs::msg::PoseStamped & global_goal)
 {
   std::lock_guard<std::mutex> lock_reinit(m_mutex);
 
   geometry_msgs::msg::Twist cmd_vel;
   geometry_msgs::msg::TwistStamped cmd_vel_final;
 
-  if (m_global_plan.poses.empty()) {
-    RCLCPP_WARN_THROTTLE(
-      logger_, *clock_, 1.0,
-      "Global Plan is empty");
+  if (transformed_global_plan.poses.empty()) {
+    throw nav2_core::InvalidPath("Global plan is empty");
   }
 
-  // compute delta time
-  const rclcpp::Time time_now = rclcpp::Clock().now();
+  // Nav2 supplies a pruned path; keep the true goal separate from its endpoint.
+  tf2::Transform plan_to_local = tf2::Transform::getIdentity();
+  tf2::Transform goal_to_local = tf2::Transform::getIdentity();
+  try {
+    if (transformed_global_plan.header.frame_id != m_local_frame) {
+      tf2::fromMsg(tf_->lookupTransform(
+        m_local_frame, transformed_global_plan.header.frame_id,
+        tf2::TimePointZero).transform, plan_to_local);
+    }
+    if (global_goal.header.frame_id != m_local_frame) {
+      tf2::fromMsg(tf_->lookupTransform(
+        m_local_frame, global_goal.header.frame_id,
+        tf2::TimePointZero).transform, goal_to_local);
+    }
+  } catch (const tf2::TransformException & ex) {
+    throw nav2_core::ControllerTFError(ex.what());
+  }
+
+  const rclcpp::Time time_now = clock_->now();
   const double dt = fmax(fmin((time_now - m_last_time).seconds(), 0.1), 0);
 
-  // get latest global to local transform (map to odom)
-  tf2::Stamped<tf2::Transform> global_to_local;
-  try {
-    geometry_msgs::msg::TransformStamped msg = tf_->lookupTransform(
-      m_local_frame, m_global_frame,
-      tf2::TimePointZero);
-    tf2::fromMsg(msg, global_to_local);
-  } catch (...) {
-    RCLCPP_WARN_THROTTLE(
-      logger_, *clock_, 1.0,
-      "lookupTransform(m_local_frame, m_global_frame) failed");
-  }
+  tf2::Transform local_pose;
+  tf2::fromMsg(position.pose, local_pose);
+  const tf2::Transform local_to_robot = local_pose.inverse();
+  tf2::Transform goal_pose;
+  tf2::fromMsg(global_goal.pose, goal_pose);
+  goal_pose = goal_to_local * goal_pose;
 
-  // get latest global to local transform (map to robot)
-  tf2::Stamped<tf2::Transform> global_to_robot;
-  try {
-    geometry_msgs::msg::TransformStamped msg = tf_->lookupTransform(
-      m_base_frame, m_global_frame,
-      tf2::TimePointZero);
-    tf2::fromMsg(msg, global_to_robot);
-  } catch (...) {
-    RCLCPP_WARN_THROTTLE(
-      logger_, *clock_, 1.0,
-      "lookupTransform(m_base_frame, m_global_frame) failed");
-  }
-
-  // transform plan to local frame (odom)
   std::vector<tf2::Transform> local_plan;
   std::vector<tf2::Transform> transformed_plan;
-
-  for (const auto & pose : m_global_plan.poses) {
-    tf2::Transform pose_;
-    tf2::Transform robot_pose_;
-    tf2::fromMsg(pose.pose, pose_);
-    tf2::fromMsg(pose.pose, robot_pose_);
-    local_plan.push_back(global_to_local * pose_);
-    transformed_plan.push_back(global_to_robot * robot_pose_);
+  for (const auto & pose : transformed_global_plan.poses) {
+    tf2::Transform pose_tf;
+    tf2::fromMsg(pose.pose, pose_tf);
+    local_plan.push_back(plan_to_local * pose_tf);
+    transformed_plan.push_back(local_to_robot * local_plan.back());
   }
 
   if (m_allow_reversing && count <= 1) {
-    auto point_1 = tf2::toMsg(transformed_plan[5]);
+    auto point_1 = tf2::toMsg(transformed_plan[std::min<size_t>(5, transformed_plan.size() - 1)]);
 
     // Estimate if the robot has travelled and then determine if the path is reversed! ToDo
     // Just checks if the goal is in the rear end of the robot
@@ -253,10 +248,6 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
       acc_lim_x = -1.0 * acc_lim_x;
     }
   }
-
-  // get latest local pose
-  tf2::Transform local_pose;
-  tf2::fromMsg(position.pose, local_pose);
 
   const double start_yaw = tf2::getYaw(local_pose.getRotation());
   const double start_vel_x = speed.linear.x;
@@ -335,7 +326,7 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
   // fill local plan later
   nav_msgs::msg::Path local_path;
   local_path.header.frame_id = m_local_frame;
-  local_path.header.stamp = m_odometry->header.stamp;
+  local_path.header.stamp = time_now;
 
   // compute obstacle distance
   bool have_obstacle = false;
@@ -414,7 +405,8 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
   {
     // check if goal is within reach
     auto iter_next = move_along_path(iter_target, local_plan.cend(), max_goal_dist);
-    is_goal_target = iter_next + 1 >= local_plan.cend();
+    is_goal_target = iter_next + 1 >= local_plan.cend() &&
+      (goal_pose.getOrigin() - actual_pos).length() <= max_goal_dist;
 
     if (is_goal_target) {
       // go straight to goal
@@ -425,7 +417,7 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
   double target_yaw = 0;
   if (is_goal_target) {
     // take goal orientation
-    target_yaw = tf2::getYaw(iter_target->getRotation());
+    target_yaw = tf2::getYaw(goal_pose.getRotation());
   } else {
     // compute path based target orientation
     auto iter_next = move_along_path(iter_target, local_plan.cend(), lookahead_dist);
@@ -435,7 +427,8 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
   }
 
   // get target position
-  const tf2::Vector3 target_pos = iter_target->getOrigin();
+  const tf2::Vector3 target_pos =
+    is_goal_target ? goal_pose.getOrigin() : iter_target->getOrigin();
   double yaw_error = 0.0;
 
   if (m_robot_direction == 1 || is_goal_target) {
@@ -455,7 +448,7 @@ geometry_msgs::msg::TwistStamped NeoLocalPlanner::computeVelocityCommands(
   }
 
   // compute errors
-  const double goal_dist = (local_plan.back().getOrigin() - actual_pos).length();
+  const double goal_dist = (goal_pose.getOrigin() - actual_pos).length();
   const tf2::Vector3 pos_error =
     tf2::Transform(createQuaternionFromYaw(actual_yaw), actual_pos).inverse() * target_pos;
 
@@ -811,7 +804,7 @@ NeoLocalPlanner::dynamicParametersCallback(
 
 bool NeoLocalPlanner::reset_lastvel(nav_msgs::msg::Path m_global_plan, nav_msgs::msg::Path plan)
 {
-  if (m_global_plan.poses.empty() ||
+  if (plan.poses.empty() || m_global_plan.poses.empty() ||
     plan.poses.back().pose == m_global_plan.poses.back().pose)
   {
     return false;
@@ -825,8 +818,9 @@ bool NeoLocalPlanner::reset_lastvel(nav_msgs::msg::Path m_global_plan, nav_msgs:
   }
 }
 
-void NeoLocalPlanner::setPlan(const nav_msgs::msg::Path & plan)
+void NeoLocalPlanner::newPathReceived(const nav_msgs::msg::Path & plan)
 {
+  std::lock_guard<std::mutex> lock_reinit(m_mutex);
   m_reset_lastvel = reset_lastvel(m_global_plan, plan);
   m_global_plan = plan;
 }
@@ -838,142 +832,143 @@ void NeoLocalPlanner::setSpeedLimit(
 }
 
 void NeoLocalPlanner::configure(
-  const rclcpp_lifecycle::LifecycleNode::WeakPtr & parent,
-  std::string name, const std::shared_ptr<tf2_ros::Buffer> tf,
+  const nav2::LifecycleNode::WeakPtr & parent,
+  std::string name, const nav2::TransformBuffer::SharedPtr tf,
   const std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros)
 {
   auto node = parent.lock();
   node_ = parent;
   plugin_name_ = name;
   clock_ = node->get_clock();
-  nav2_util::declare_parameter_if_not_declared(
+  m_last_time = clock_->now();
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".acc_lim_x", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".acc_lim_y", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".acc_lim_theta", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".min_vel_x", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".max_vel_x", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".min_vel_y", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".max_vel_y", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".min_rot_vel", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".max_rot_vel", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".min_vel_trans", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".max_vel_trans", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".rot_stopped_vel", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".trans_stopped_vel", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".yaw_goal_tolerance", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".xy_goal_tolerance", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".goal_tune_time", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".lookahead_time", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".lookahead_dist", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".start_yaw_error", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".pos_x_gain", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".pos_y_gain", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".pos_y_yaw_gain", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".yaw_gain", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".static_yaw_gain", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".cost_x_gain", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".cost_y_gain", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".cost_y_yaw_gain", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".cost_y_lookahead_dist", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".cost_y_lookahead_time", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".cost_yaw_gain", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".low_pass_gain", rclcpp::ParameterValue(
       0.2));
 
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".max_cost", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".max_curve_vel", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".max_goal_dist", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".max_backup_dist", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".min_stop_dist", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".emergency_acc_lim_x", rclcpp::ParameterValue(
       0.2));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".differential_drive", rclcpp::ParameterValue(
       true));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".allow_reversing", rclcpp::ParameterValue(
       false));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".odom_topic", rclcpp::ParameterValue(
       "/odom"));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".local_plan_topic", rclcpp::ParameterValue(
       "/local_plan"));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".local_frame", rclcpp::ParameterValue(
       "odom"));
-  nav2_util::declare_parameter_if_not_declared(
+  nav2::declare_parameter_if_not_declared(
     node, plugin_name_ + ".base_frame", rclcpp::ParameterValue(
       "base_link"));
 
@@ -1050,9 +1045,9 @@ void NeoLocalPlanner::configure(
   // Creating odometery subscriber and local plan publisher
   m_odom_sub = node->create_subscription<nav_msgs::msg::Odometry>(
     odom_topic,
-    rclcpp::SystemDefaultsQoS(),
-    std::bind(&NeoLocalPlanner::odomCallback, this, std::placeholders::_1));
-  m_local_plan_pub = node->create_publisher<nav_msgs::msg::Path>(local_plan_topic, 1);
+    std::bind(&NeoLocalPlanner::odomCallback, this, std::placeholders::_1),
+    rclcpp::SystemDefaultsQoS());
+  m_local_plan_pub = node->create_publisher<nav_msgs::msg::Path>(local_plan_topic, rclcpp::QoS(1));
 }
 
 void NeoLocalPlanner::odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg)

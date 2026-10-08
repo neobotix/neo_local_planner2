@@ -46,14 +46,13 @@
 
 #include "nav2_core/controller.hpp"
 #include "nav2_util/geometry_utils.hpp"
-#include "nav2_util/lifecycle_node.hpp"
+#include "nav2_ros_common/lifecycle_node.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "pluginlib/class_loader.hpp"
 #include "pluginlib/class_list_macros.hpp"
 #include "nav2_util/odometry_utils.hpp"
-#include "geometry_msgs/msg/pose2_d.hpp"
 #include "geometry_msgs/msg/vector3_stamped.hpp"
-#include "tf2_ros/buffer.h"
+#include "tf2_ros/buffer.hpp"
 #include "angles/angles.h"
 
 namespace neo_local_planner2
@@ -80,8 +79,8 @@ public:
    * @param costmap_ros Costmap2DROS object of environment
    */
   void configure(
-    const rclcpp_lifecycle::LifecycleNode::WeakPtr & parent,
-    std::string name, const std::shared_ptr<tf2_ros::Buffer> tf,
+    const nav2::LifecycleNode::WeakPtr & parent,
+    std::string name, const nav2::TransformBuffer::SharedPtr tf,
     const std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros) override;
 
   /**
@@ -114,13 +113,15 @@ public:
   geometry_msgs::msg::TwistStamped computeVelocityCommands(
     const geometry_msgs::msg::PoseStamped & pose,
     const geometry_msgs::msg::Twist & speed,
-    nav2_core::GoalChecker * goal_checker) override;
+    nav2_core::GoalChecker * goal_checker,
+    const nav_msgs::msg::Path & transformed_global_plan,
+    const geometry_msgs::msg::PoseStamped & global_goal) override;
 
   /**
-   * @brief nav2_core setPlan - Sets the global plan
+   * @brief Notify the controller when a new global path arrives
    * @param path The global plan
    */
-  void setPlan(const nav_msgs::msg::Path & path) override;
+  void newPathReceived(const nav_msgs::msg::Path & path) override;
 
   /**
    * @brief Limits the maximum linear speed of the robot.
@@ -143,7 +144,7 @@ public:
   bool reset_lastvel(nav_msgs::msg::Path m_global_plan, nav_msgs::msg::Path plan);
 
 private:
-  std::shared_ptr<tf2_ros::Buffer> tf_;
+  nav2::TransformBuffer::SharedPtr tf_;
   std::string plugin_name_;
   std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros_;
   nav2_costmap_2d::Costmap2D * costmap_;
@@ -157,7 +158,7 @@ private:
   nav_msgs::msg::Odometry::SharedPtr m_odometry;
 
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr m_odom_sub;
-  rclcpp_lifecycle::LifecycleNode::WeakPtr node_;
+  nav2::LifecycleNode::WeakPtr node_;
   rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr dyn_params_handler_;
   std::shared_ptr<rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Path>> m_local_plan_pub;
 
